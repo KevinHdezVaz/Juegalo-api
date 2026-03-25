@@ -1,0 +1,14 @@
+{
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "env": {
+    "SUPABASE_URL":           "@supabase_url",
+    "SUPABASE_SERVICE_KEY":   "@supabase_service_key",
+    "TAPJOY_SECRET_KEY":      "@tapjoy_secret_key",
+    "CPX_RESEARCH_APP_ID":    "@cpx_research_app_id",
+    "CPX_RESEARCH_SECRET":    "@cpx_research_secret",
+    "PAYPAL_CLIENT_ID":       "@paypal_client_id",
+    "PAYPAL_CLIENT_SECRET":   "@paypal_client_secret",
+    "MERCADOPAGO_ACCESS_TOKEN": "@mercadopago_access_token"
+  }
+}
