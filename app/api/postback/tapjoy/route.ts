@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { creditCoins } from '../../../../lib/supabase';
 import { AppConstants } from '../../../../lib/constants';
 

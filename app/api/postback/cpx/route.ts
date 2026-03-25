@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { creditCoins } from '../../../../lib/supabase';
 import { AppConstants } from '../../../../lib/constants';
 
@@ -13,29 +13,33 @@ export async function GET(req: NextRequest) {
 
   const userId     = searchParams.get('user_id');
   const transId    = searchParams.get('trans_id');
-  const amountStr  = searchParams.get('amount_local'); // monedas CPX
+  const amountStr  = searchParams.get('amount_local');
+  const status     = searchParams.get('status') ?? '1'; // 1=completada, 2=cancelada
   const hash       = searchParams.get('hash');
 
   if (!userId || !transId || !amountStr || !hash) {
     return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 });
   }
 
-  // Verificar hash de CPX Research
+  // Encuesta cancelada — no acreditar
+  if (status === '2') {
+    return NextResponse.json({ ok: true, skipped: 'cancelled' });
+  }
+
+  // Verificar hash: MD5(trans_id-secret)  ← formato real de CPX Research
   const secret = process.env.CPX_RESEARCH_SECRET!;
-  const appId  = process.env.CPX_RESEARCH_APP_ID!;
   const expectedHash = crypto
     .createHash('md5')
-    .update(`${userId}-${appId}${secret}`)
+    .update(`${transId}-${secret}`)
     .digest('hex');
 
   if (hash !== expectedHash) {
     return NextResponse.json({ error: 'Hash inválido' }, { status: 403 });
   }
 
-  // CPX paga en su propia moneda, convertir a monedas JUÉGALO
-  // 1 CPX coin ≈ $0.001 USD → ajustar según tu acuerdo con CPX
-  const cpxCoins   = parseInt(amountStr, 10);
-  const juegaloCoins = Math.floor(cpxCoins * 0.6); // 60% al usuario
+  // amount_local ya viene en tus monedas (configurado en Reward Settings)
+  const cpxCoins     = parseInt(amountStr, 10);
+  const juegaloCoins = Math.max(1, cpxCoins); // ya es la cantidad correcta
 
   try {
     await creditCoins(

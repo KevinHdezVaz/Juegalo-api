@@ -8,12 +8,12 @@
     "start": "next start"
   },
   "dependencies": {
-    "next": "^15.0.0",
     "@supabase/supabase-js": "^2.48.0",
-    "crypto": "^1.0.1"
+    "next": "^15.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/react": "19.2.14",
     "typescript": "^5.0.0"
   }
 }
