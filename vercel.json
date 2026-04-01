@@ -1,4 +1,22 @@
 {
   "framework": "nextjs",
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron/weekly-reset",
+      "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/notify/daily-bonus",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/notify/streak-risk",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/notify/weekly-ranking",
+      "schedule": "0 15 * * 1"
+    }
+  ]
 }
