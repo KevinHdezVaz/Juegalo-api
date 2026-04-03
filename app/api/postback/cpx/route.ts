@@ -1,60 +1,93 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'node:crypto';
-import { creditCoins } from '../../../../lib/supabase';
-import { AppConstants } from '../../../../lib/constants';
+import { supabase, creditCoins } from '../../../../lib/supabase';
 
 /**
  * GET /api/postback/cpx
- * CPX Research llama este endpoint cuando usuario completa encuesta.
- * Documentación: https://developers.cpx-research.com/
+ *
+ * CPX Research llama este endpoint cuando el usuario completa una encuesta.
+ * Docs: https://developers.cpx-research.com/docs/postback
+ *
+ * Parámetros que envía CPX:
+ *   user_id      — ext_user_id que pasamos en la config (UID de Supabase)
+ *   trans_id     — ID único de la transacción CPX
+ *   amount_local — monedas a acreditar (configurado en CPX → Reward Settings)
+ *   status       — 1=completada, 2=cancelada/chargeback
+ *   hash         — MD5(user_id + app_id + hash_key) para validar autenticidad
+ *
+ * CPX espera respuesta "1" en texto plano para confirmar recepción.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
-  const userId     = searchParams.get('user_id');
-  const transId    = searchParams.get('trans_id');
-  const amountStr  = searchParams.get('amount_local');
-  const status     = searchParams.get('status') ?? '1'; // 1=completada, 2=cancelada
-  const hash       = searchParams.get('hash');
+  const userId    = searchParams.get('user_id');
+  const transId   = searchParams.get('trans_id');
+  const amountStr = searchParams.get('amount_local');
+  const status    = searchParams.get('status') ?? '1';
+  const hash      = searchParams.get('hash');
 
+  // ── Parámetros obligatorios ──────────────────────────────────────
   if (!userId || !transId || !amountStr || !hash) {
-    return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 });
+    console.warn('[CPX] Parámetros faltantes:', { userId, transId, amountStr, hash });
+    return new NextResponse('0', { status: 400 });
   }
 
-  // Encuesta cancelada — no acreditar
+  // ── Encuesta cancelada / chargeback ─────────────────────────────
   if (status === '2') {
-    return NextResponse.json({ ok: true, skipped: 'cancelled' });
+    console.log(`[CPX] ↩️ Encuesta cancelada: trans_id=${transId}`);
+    return new NextResponse('1'); // CPX requiere "1" aunque no acreditemos
   }
 
-  // Verificar hash: MD5(trans_id-secret)  ← formato real de CPX Research
-  const secret = process.env.CPX_RESEARCH_SECRET!;
+  // ── Verificar hash — MD5(user_id + app_id + hash_key) ───────────
+  const appId   = process.env.CPX_RESEARCH_APP_ID!;
+  const hashKey = process.env.CPX_RESEARCH_SECRET!;
+
   const expectedHash = crypto
     .createHash('md5')
-    .update(`${transId}-${secret}`)
+    .update(`${userId}${appId}${hashKey}`)
     .digest('hex');
 
   if (hash !== expectedHash) {
-    return NextResponse.json({ error: 'Hash inválido' }, { status: 403 });
+    console.warn('[CPX] Hash inválido:', { received: hash, expected: expectedHash });
+    return new NextResponse('0', { status: 403 });
   }
 
-  // amount_local ya viene en tus monedas (configurado en Reward Settings)
-  const cpxCoins     = parseInt(amountStr, 10);
-  const juegaloCoins = Math.max(1, cpxCoins); // ya es la cantidad correcta
+  // ── Detección de duplicados ──────────────────────────────────────
+  // Buscamos si ya existe una transacción con este trans_id en metadata
+  const { data: existing } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('source', 'cpx_research')
+    .contains('metadata', { trans_id: transId })
+    .maybeSingle();
+
+  if (existing) {
+    console.warn(`[CPX] ⚠️ Transacción duplicada ignorada: trans_id=${transId}`);
+    return new NextResponse('1'); // confirmamos para que CPX no reintente
+  }
+
+  // ── Acreditar monedas ────────────────────────────────────────────
+  const coins = parseInt(amountStr, 10);
+  if (isNaN(coins) || coins <= 0) {
+    console.warn('[CPX] Monto inválido:', amountStr);
+    return new NextResponse('0', { status: 400 });
+  }
 
   try {
     await creditCoins(
       userId,
-      juegaloCoins,
+      coins,
       'cpx_research',
-      `Encuesta completada: ${transId}`,
-      { trans_id: transId, cpx_coins: cpxCoins }
+      `Encuesta completada CPX`,
+      { trans_id: transId, amount_local: coins, app_id: appId }
     );
 
-    console.log(`[CPX] ✅ ${juegaloCoins} monedas a ${userId}`);
-    return NextResponse.json({ ok: true });
+    console.log(`[CPX] ✅ ${coins} monedas → usuario ${userId} | trans_id: ${transId}`);
+    return new NextResponse('1'); // CPX requiere texto plano "1"
 
   } catch (err) {
-    console.error('[CPX] Error:', err);
-    return NextResponse.json({ error: 'Error interno' }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[CPX] ❌ Error:', message);
+    return new NextResponse('0', { status: 500 });
   }
 }
