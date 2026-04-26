@@ -4,7 +4,7 @@ export const metadata = {
     'Centro de ayuda de MusicMeet. Preguntas frecuentes y contacto con el equipo de soporte.',
 };
 
-const SUPPORT_EMAIL = 'soporte@musicmeet.app';
+const SUPPORT_EMAIL = 'kevinv.contacto@gmail.com';
 const APP_NAME = 'MusicMeet';
 
 export default function Soporte() {

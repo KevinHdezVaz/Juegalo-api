@@ -5,7 +5,7 @@ export const metadata = {
 
 const LAST_UPDATED = '26 de abril de 2025';
 const APP_NAME = 'MusicMeet';
-const CONTACT = 'soporte@musicmeet.app';
+const CONTACT = 'kevinv.contacto@gmail.com';
 const BUNDLE_ID = 'com.musicapp.appMusicComunidad';
 
 export default function Privacidad() {
