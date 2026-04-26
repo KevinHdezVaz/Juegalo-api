@@ -13,7 +13,10 @@ interface FcmMessage {
 
 // Obtiene un access token OAuth2 desde la service account
 async function getAccessToken(): Promise<string> {
-  const serviceAccountB64 = process.env.FIREBASE_SERVICE_ACCOUNT!;
+  const serviceAccountB64 = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!serviceAccountB64) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT no está configurada en las variables de entorno de Vercel');
+  }
   const sa = JSON.parse(Buffer.from(serviceAccountB64, 'base64').toString('utf8'));
 
   const now   = Math.floor(Date.now() / 1000);

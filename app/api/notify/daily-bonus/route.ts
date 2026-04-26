@@ -14,6 +14,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
+  // Si FCM no está configurado, salir silenciosamente sin error
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT || !process.env.FIREBASE_PROJECT_ID) {
+    console.warn('[Cron] FIREBASE_SERVICE_ACCOUNT o FIREBASE_PROJECT_ID no configurados. Saltando notificaciones.');
+    return NextResponse.json({ ok: true, sent: 0, message: 'FCM no configurado' });
+  }
+
   const tokens = await getUnclaimedBonusTokens();
 
   if (tokens.length === 0) {

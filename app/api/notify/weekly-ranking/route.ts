@@ -11,6 +11,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT || !process.env.FIREBASE_PROJECT_ID) {
+    return NextResponse.json({ ok: true, sent: 0, message: 'FCM no configurado' });
+  }
+
   const tokens = await getActiveTokens(14); // usuarios activos últimas 2 semanas
 
   const sent = await sendToTokens(tokens, {
