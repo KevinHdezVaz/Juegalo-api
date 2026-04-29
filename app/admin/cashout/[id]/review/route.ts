@@ -36,7 +36,7 @@ export async function GET(
     .eq('id', id);
 
   // Notificar al usuario
-  const usersData = cashout.users as { fcm_token: string | null } | null;
+  const usersData = cashout.users as unknown as { fcm_token: string | null } | null;
   const fcmToken = usersData?.fcm_token;
   if (fcmToken && process.env.FIREBASE_SERVICE_ACCOUNT && process.env.FIREBASE_PROJECT_ID) {
     const amount = Number(cashout.amount_usd).toFixed(2);
