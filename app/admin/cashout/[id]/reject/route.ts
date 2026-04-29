@@ -42,7 +42,8 @@ export async function GET(
     .eq('id', id);
 
   // Notificar al usuario
-  const fcmToken = req.users?.fcm_token;
+  const usersData = req.users as { fcm_token: string | null } | null;
+  const fcmToken = usersData?.fcm_token;
   if (fcmToken && process.env.FIREBASE_SERVICE_ACCOUNT && process.env.FIREBASE_PROJECT_ID) {
     const coins = Number(req.coins).toLocaleString('en-US');
     await sendToToken(fcmToken, {
