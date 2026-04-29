@@ -13,40 +13,38 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const { data: cashout, error: fetchError } = await supabase
+  const { data: cashout, error } = await supabase
     .from('cashout_requests')
-    .select('*, users(fcm_token, username)')
+    .select('status, amount_usd, method, users(fcm_token)')
     .eq('id', id)
     .single();
 
-  if (fetchError || !cashout) {
-    return new NextResponse(`Retiro no encontrado: ${fetchError?.message}`, { status: 404 });
+  if (error || !cashout) {
+    return new NextResponse('Retiro no encontrado', { status: 404 });
   }
 
-  if (cashout.status === 'paid') {
+  if (cashout.status !== 'pending') {
     return NextResponse.redirect(new URL('/admin?error=ya_procesado', req.url));
   }
 
-  // Marcar como pagado
   await supabase
     .from('cashout_requests')
     .update({
-      status:       'paid',
-      processed_at: new Date().toISOString(),
-      notes:        `Pago manual aprobado (${cashout.method})`,
+      status: 'processing',
+      notes:  'En revisión por el equipo de JUEGALO',
     })
     .eq('id', id);
 
-  // Notificar al usuario si tiene token FCM
+  // Notificar al usuario
   const fcmToken = cashout.users?.fcm_token;
   if (fcmToken && process.env.FIREBASE_SERVICE_ACCOUNT && process.env.FIREBASE_PROJECT_ID) {
     const amount = Number(cashout.amount_usd).toFixed(2);
     await sendToToken(fcmToken, {
-      title: '🎉 ¡Tu pago fue enviado!',
-      body:  `$${amount} USD ya están en camino a tu cuenta de ${cashout.method === 'paypal' ? 'PayPal' : 'MercadoPago'}.`,
-      data:  { type: 'cashout_paid', screen: 'wallet' },
+      title: '🔍 Estamos revisando tu solicitud',
+      body:  `Tu retiro de $${amount} USD está siendo verificado. Te avisamos en cuanto esté listo.`,
+      data:  { type: 'cashout_reviewing', screen: 'wallet' },
     });
   }
 
-  return NextResponse.redirect(new URL('/admin?success=aprobado', req.url));
+  return NextResponse.redirect(new URL('/admin?success=en_revision', req.url));
 }

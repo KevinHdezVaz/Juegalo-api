@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { sendToToken } from '../../../../../lib/fcm';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -12,10 +13,10 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  // Obtener la solicitud para devolver monedas
+  // Obtener la solicitud para devolver monedas y notificar
   const { data: req } = await supabase
     .from('cashout_requests')
-    .select('user_id, coins')
+    .select('user_id, coins, amount_usd, method, users(fcm_token)')
     .eq('id', id)
     .single();
 
@@ -35,10 +36,21 @@ export async function GET(
   await supabase
     .from('cashout_requests')
     .update({
-      status: 'rejected',
+      status:       'rejected',
       processed_at: new Date().toISOString(),
     })
     .eq('id', id);
 
-  return NextResponse.redirect(new URL('/admin', _req.url));
+  // Notificar al usuario
+  const fcmToken = req.users?.fcm_token;
+  if (fcmToken && process.env.FIREBASE_SERVICE_ACCOUNT && process.env.FIREBASE_PROJECT_ID) {
+    const coins = Number(req.coins).toLocaleString('en-US');
+    await sendToToken(fcmToken, {
+      title: '❌ Tu retiro no pudo procesarse',
+      body:  `Tus ${coins} monedas han sido devueltas a tu cuenta. Puedes intentarlo de nuevo.`,
+      data:  { type: 'cashout_rejected', screen: 'wallet' },
+    });
+  }
+
+  return NextResponse.redirect(new URL('/admin?success=rechazado', _req.url));
 }
