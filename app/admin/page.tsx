@@ -532,69 +532,64 @@ export default async function AdminPage({
                   <span className="preset-name">Ranking semanal</span>
                   <span className="preset-desc">Todos activos</span>
                 </a>
+                <a href="/admin?tab=notificaciones&preset=prueba" className={`preset-btn${activePreset === 'prueba' ? ' active' : ''}`} style={{ borderColor: activePreset === 'prueba' ? '#F59E0B' : undefined, background: activePreset === 'prueba' ? '#FFFBEB' : undefined }}>
+                  <span className="preset-emoji">🧪</span>
+                  <span className="preset-name">Envío de prueba</span>
+                  <span className="preset-desc">Por correo</span>
+                </a>
               </div>
             </div>
 
-            {/* Envío de prueba por correo */}
-            <div className="notify-card" style={{ borderColor: '#FDE68A', background: '#FFFBEB' }}>
-              <div className="notify-card-title">🧪 Envío de prueba</div>
-              <div className="notify-card-sub">Envía a un usuario específico por su correo. Útil para probar antes de hacer envío masivo.</div>
-              <form method="POST" action="/admin/notify-user">
-                <div className="form-group">
-                  <label className="form-label">Correo del usuario</label>
-                  <input name="email" type="email" className="form-input" placeholder="usuario@ejemplo.com" required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Título</label>
-                  <input name="title" className="form-input" placeholder="ej: 🧪 Prueba de notificación" defaultValue="🧪 Prueba de notificación" required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Mensaje</label>
-                  <textarea name="message" className="form-textarea" placeholder="ej: Si ves esto, funciona correctamente." defaultValue="Si ves esto, las notificaciones funcionan correctamente 🎉" required />
-                </div>
-                <button type="submit" className="send-btn" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>🧪 Enviar prueba</button>
-              </form>
-            </div>
-
-            {/* Compose — form HTML nativo, POST directo, sin JS */}
-            <div className="notify-card">
-              <div className="notify-card-title">✏️ Componer notificación</div>
-              <div className="notify-card-sub">
-                {activePreset
-                  ? `Preset "${PRESETS[activePreset]?.title ?? activePreset}" cargado. Edita si quieres y luego envía.`
-                  : 'Selecciona un envío rápido arriba o escribe tu propio mensaje.'}
-              </div>
-
-              <form method="POST" action="/admin/notify-form">
-                <div className="form-group">
-                  <label className="form-label">Título</label>
-                  <input
-                    name="title"
-                    className="form-input"
-                    placeholder="ej: 🎉 ¡Novedad en JUEGALO!"
-                    defaultValue={formTitle}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Mensaje</label>
-                  <textarea
-                    name="message"
-                    className="form-textarea"
-                    placeholder="ej: Tenemos una sorpresa para ti. ¡Entra y descúbrela!"
-                    defaultValue={formBody}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Audiencia</label>
-                  <select name="audience" className="form-select" style={{ maxWidth: 280 }} defaultValue={formAudience}>
-                    <option value="all">Todos los activos (últimos 30 días)</option>
-                    <option value="unclaimed_bonus">Solo los que no reclamaron bono hoy</option>
-                  </select>
-                </div>
-                <button type="submit" className="send-btn">📤 Enviar notificación</button>
-              </form>
+            {/* Compose / Prueba — cambia según el preset activo */}
+            <div className="notify-card" style={activePreset === 'prueba' ? { borderColor: '#FDE68A' } : {}}>
+              {activePreset === 'prueba' ? (
+                <>
+                  <div className="notify-card-title">🧪 Envío de prueba</div>
+                  <div className="notify-card-sub">Envía a un usuario específico por su correo. Úsalo para probar antes de hacer un envío masivo.</div>
+                  <form method="POST" action="/admin/notify-user">
+                    <div className="form-group">
+                      <label className="form-label">Correo del usuario</label>
+                      <input name="email" type="email" className="form-input" placeholder="usuario@ejemplo.com" required />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Título</label>
+                      <input name="title" className="form-input" defaultValue="🧪 Prueba de notificación" required />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Mensaje</label>
+                      <textarea name="message" className="form-textarea" defaultValue="Si ves esto, las notificaciones funcionan correctamente 🎉" required />
+                    </div>
+                    <button type="submit" className="send-btn" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>🧪 Enviar prueba</button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <div className="notify-card-title">✏️ Componer notificación</div>
+                  <div className="notify-card-sub">
+                    {activePreset
+                      ? `Preset cargado. Edita si quieres y luego envía.`
+                      : 'Selecciona un envío rápido arriba o escribe tu propio mensaje.'}
+                  </div>
+                  <form method="POST" action="/admin/notify-form">
+                    <div className="form-group">
+                      <label className="form-label">Título</label>
+                      <input name="title" className="form-input" placeholder="ej: 🎉 ¡Novedad en JUEGALO!" defaultValue={formTitle} required />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Mensaje</label>
+                      <textarea name="message" className="form-textarea" placeholder="ej: Tenemos una sorpresa para ti. ¡Entra y descúbrela!" defaultValue={formBody} required />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Audiencia</label>
+                      <select name="audience" className="form-select" style={{ maxWidth: 280 }} defaultValue={formAudience}>
+                        <option value="all">Todos los activos (últimos 30 días)</option>
+                        <option value="unclaimed_bonus">Solo los que no reclamaron bono hoy</option>
+                      </select>
+                    </div>
+                    <button type="submit" className="send-btn">📤 Enviar notificación</button>
+                  </form>
+                </>
+              )}
             </div>
 
           </div>}
