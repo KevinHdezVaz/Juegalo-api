@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const EMAILJS_SERVICE_ID  = 'service_m7kwjz8';
 const EMAILJS_TEMPLATE_ID = 'template_4neo6wl';
 const EMAILJS_PUBLIC_KEY  = '3pdmYJQXeK7_EhCFQ';
+const EMAILJS_PRIVATE_KEY = 'fl4tm65TN7uUM87g097e7';
 
 /**
  * POST /api/notify/new-cashout
@@ -34,9 +35,10 @@ export async function POST(req: NextRequest) {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      service_id:  EMAILJS_SERVICE_ID,
-      template_id: EMAILJS_TEMPLATE_ID,
-      user_id:     EMAILJS_PUBLIC_KEY,
+      service_id:   EMAILJS_SERVICE_ID,
+      template_id:  EMAILJS_TEMPLATE_ID,
+      user_id:      EMAILJS_PUBLIC_KEY,
+      accessToken:  EMAILJS_PRIVATE_KEY,
       template_params: {
         username,
         user_email: userEmail,
