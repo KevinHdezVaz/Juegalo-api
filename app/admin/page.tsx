@@ -302,11 +302,11 @@ export default async function AdminPage({
 
           {/* TABS */}
           <div className="tabs-bar">
-            <button className={`tab-btn ${activeTab === 'retiros' ? 'active' : ''}`} {...{'onclick': "switchTab('retiros')"}}>
+            <button className={`tab-btn ${activeTab === 'retiros' ? 'active' : ''}`} {...{'onclick': "switchTab('retiros', this)"}}>
               💳 Retiros
               {pending.length > 0 && <span className="tab-badge">{pending.length}</span>}
             </button>
-            <button className={`tab-btn ${activeTab === 'notificaciones' ? 'active' : ''}`} {...{'onclick': "switchTab('notificaciones')"}}>
+            <button className={`tab-btn ${activeTab === 'notificaciones' ? 'active' : ''}`} {...{'onclick': "switchTab('notificaciones', this)"}}>
               🔔 Notificaciones
             </button>
           </div>
@@ -470,27 +470,27 @@ export default async function AdminPage({
               <div className="notify-card-title">⚡ Envíos rápidos</div>
               <div className="notify-card-sub">Selecciona un preset para precargar el mensaje. Puedes editarlo antes de enviar.</div>
               <div className="presets-grid">
-                <button className="preset-btn" {...{'onclick': "loadPreset('daily_bonus')"}}>
+                <button className="preset-btn" {...{'onclick': "loadPreset('daily_bonus', this)"}}>
                   <span className="preset-emoji">🎁</span>
                   <span className="preset-name">Bono diario</span>
                   <span className="preset-desc">Sin reclamar hoy</span>
                 </button>
-                <button className="preset-btn" {...{'onclick': "loadPreset('new_games')"}}>
+                <button className="preset-btn" {...{'onclick': "loadPreset('new_games', this)"}}>
                   <span className="preset-emoji">🎮</span>
                   <span className="preset-name">Nuevas misiones</span>
                   <span className="preset-desc">Todos activos (30d)</span>
                 </button>
-                <button className="preset-btn" {...{'onclick': "loadPreset('surveys')"}}>
+                <button className="preset-btn" {...{'onclick': "loadPreset('surveys', this)"}}>
                   <span className="preset-emoji">📋</span>
                   <span className="preset-name">Hay encuestas</span>
                   <span className="preset-desc">Todos activos</span>
                 </button>
-                <button className="preset-btn" {...{'onclick': "loadPreset('streak')"}}>
+                <button className="preset-btn" {...{'onclick': "loadPreset('streak', this)"}}>
                   <span className="preset-emoji">🔥</span>
                   <span className="preset-name">Cuida tu racha</span>
                   <span className="preset-desc">Todos activos</span>
                 </button>
-                <button className="preset-btn" {...{'onclick': "loadPreset('ranking')"}}>
+                <button className="preset-btn" {...{'onclick': "loadPreset('ranking', this)"}}>
                   <span className="preset-emoji">🏆</span>
                   <span className="preset-name">Ranking semanal</span>
                   <span className="preset-desc">Todos activos</span>
@@ -556,7 +556,7 @@ export default async function AdminPage({
             },
           };
 
-          function loadPreset(key) {
+          function loadPreset(key, btn) {
             const p = PRESETS[key];
             if (!p) return;
             document.getElementById('notif-title').value    = p.title;
@@ -564,7 +564,7 @@ export default async function AdminPage({
             document.getElementById('notif-audience').value = p.audience;
             // Highlight active preset
             document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-            event.currentTarget.classList.add('active');
+            btn.classList.add('active');
             // Clear previous result
             showResult('', '');
             // Scroll to compose
@@ -599,11 +599,11 @@ export default async function AdminPage({
             el.textContent = msg;
           }
 
-          function switchTab(tab) {
+          function switchTab(tab, btn) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tab).classList.add('active');
-            event.currentTarget.classList.add('active');
+            btn.classList.add('active');
           }
         `}} />
 
