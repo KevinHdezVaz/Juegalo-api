@@ -95,7 +95,7 @@ export const revalidate = 0;
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string }>;
 }) {
   const [requests, stats, sp] = await Promise.all([
     getCashoutRequests(),
@@ -293,6 +293,7 @@ export default async function AdminPage({
           {successMsg === 'en_revision' && <div className="alert alert-info">🔍 Solicitud en revisión. El usuario ya lo puede ver en la app.</div>}
           {successMsg === 'rechazado'   && <div className="alert alert-error">🚫 Retiro rechazado. Monedas devueltas y usuario notificado.</div>}
           {successMsg === 'enviado'     && <div className="alert alert-success">📤 Notificación enviada a {sentCount ?? '?'}{totalCount != null ? ` de ${totalCount}` : ''} dispositivos.</div>}
+          {successMsg === 'prueba'      && <div className="alert alert-success">✅ Notificación de prueba enviada a <strong>{decodeURIComponent(sp.username ?? '')}</strong>.</div>}
           {errorMsg === 'ya_procesado'  && <div className="alert alert-error">⚠️ Este retiro ya fue procesado anteriormente.</div>}
           {errorMsg && errorMsg !== 'ya_procesado' && <div className="alert alert-error">❌ {decodeURIComponent(errorMsg)}</div>}
 
@@ -532,6 +533,27 @@ export default async function AdminPage({
                   <span className="preset-desc">Todos activos</span>
                 </a>
               </div>
+            </div>
+
+            {/* Envío de prueba por correo */}
+            <div className="notify-card" style={{ borderColor: '#FDE68A', background: '#FFFBEB' }}>
+              <div className="notify-card-title">🧪 Envío de prueba</div>
+              <div className="notify-card-sub">Envía a un usuario específico por su correo. Útil para probar antes de hacer envío masivo.</div>
+              <form method="POST" action="/admin/notify-user">
+                <div className="form-group">
+                  <label className="form-label">Correo del usuario</label>
+                  <input name="email" type="email" className="form-input" placeholder="usuario@ejemplo.com" required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Título</label>
+                  <input name="title" className="form-input" placeholder="ej: 🧪 Prueba de notificación" defaultValue="🧪 Prueba de notificación" required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mensaje</label>
+                  <textarea name="message" className="form-textarea" placeholder="ej: Si ves esto, funciona correctamente." defaultValue="Si ves esto, las notificaciones funcionan correctamente 🎉" required />
+                </div>
+                <button type="submit" className="send-btn" style={{ background: 'linear-gradient(135deg,#F59E0B,#D97706)' }}>🧪 Enviar prueba</button>
+              </form>
             </div>
 
             {/* Compose — form HTML nativo, POST directo, sin JS */}

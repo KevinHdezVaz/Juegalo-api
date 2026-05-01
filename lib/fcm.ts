@@ -80,7 +80,14 @@ export async function sendToToken(token: string, msg: FcmMessage): Promise<boole
 
   if (!res.ok) {
     const err = await res.json();
-    console.error('[FCM] Error enviando a token:', err);
+    const status = err?.error?.status ?? '';
+    // Token muerto — borrarlo de la BD para no volver a intentarlo
+    if (status === 'NOT_FOUND' || status === 'UNREGISTERED') {
+      await supabase.from('users').update({ fcm_token: null }).eq('fcm_token', token);
+      console.log('[FCM] Token inválido eliminado de la BD.');
+    } else {
+      console.error('[FCM] Error enviando a token:', err);
+    }
     return false;
   }
   return true;
