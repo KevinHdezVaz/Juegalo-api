@@ -130,17 +130,15 @@ export default async function AdminPage({
           /* TABS */
           .tabs-bar { display:flex; gap:4px; background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:5px; margin-bottom:24px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
           .tab-btn {
-            flex:1; padding:10px 16px; border-radius:10px; border:none; cursor:pointer;
+            flex:1; padding:10px 16px; border-radius:10px;
             font-size:13px; font-weight:700; font-family:inherit;
             background:transparent; color:#64748B; display:flex; align-items:center; justify-content:center; gap:7px;
-            transition:all .18s;
+            transition:all .18s; text-decoration:none;
           }
           .tab-btn:hover { background:#F8FAFC; color:#0F172A; }
           .tab-btn.active { background:linear-gradient(135deg,#6366F1,#4F46E5); color:#fff; box-shadow:0 2px 8px rgba(99,102,241,.35); }
           .tab-badge { background:rgba(255,255,255,.25); color:#fff; font-size:10px; font-weight:800; padding:1px 6px; border-radius:999px; }
           .tab-btn:not(.active) .tab-badge { background:#FEF3C7; color:#92400E; }
-          .tab-content { display:none; }
-          .tab-content.active { display:block; }
 
           /* TABLE */
           .table-wrap { background:#fff; border:1px solid #E2E8F0; border-radius:16px; overflow:hidden; margin-bottom:24px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
@@ -302,17 +300,17 @@ export default async function AdminPage({
 
           {/* TABS */}
           <div className="tabs-bar">
-            <button className={`tab-btn ${activeTab === 'retiros' ? 'active' : ''}`} {...{'onclick': "switchTab('retiros', this)"}}>
+            <a href="/admin?tab=retiros" className={`tab-btn ${activeTab === 'retiros' ? 'active' : ''}`}>
               💳 Retiros
               {pending.length > 0 && <span className="tab-badge">{pending.length}</span>}
-            </button>
-            <button className={`tab-btn ${activeTab === 'notificaciones' ? 'active' : ''}`} {...{'onclick': "switchTab('notificaciones', this)"}}>
+            </a>
+            <a href="/admin?tab=notificaciones" className={`tab-btn ${activeTab === 'notificaciones' ? 'active' : ''}`}>
               🔔 Notificaciones
-            </button>
+            </a>
           </div>
 
           {/* TAB: RETIROS */}
-          <div id="tab-retiros" className={`tab-content ${activeTab === 'retiros' ? 'active' : ''}`}>
+          {activeTab === 'retiros' && <div>
 
             {pending.length > 0 && (
               <div className="pending-wrap">
@@ -463,7 +461,7 @@ export default async function AdminPage({
           </div>
 
           {/* TAB: NOTIFICACIONES */}
-          <div id="tab-notificaciones" className={`tab-content ${activeTab === 'notificaciones' ? 'active' : ''}`}>
+          {activeTab === 'notificaciones' && <div>
 
             {/* Presets */}
             <div className="notify-card">
@@ -599,12 +597,6 @@ export default async function AdminPage({
             el.textContent = msg;
           }
 
-          function switchTab(tab, btn) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById('tab-' + tab).classList.add('active');
-            btn.classList.add('active');
-          }
         `}} />
 
       </body>
