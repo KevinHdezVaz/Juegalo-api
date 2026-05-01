@@ -1,6 +1,34 @@
 import React from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+const PRESETS: Record<string, { title: string; body: string; audience: string }> = {
+  daily_bonus: {
+    title:    '🎁 ¡Tu bono diario te espera!',
+    body:     'Entra a JUEGALO y reclama tus monedas gratis de hoy.',
+    audience: 'unclaimed_bonus',
+  },
+  new_games: {
+    title:    '🎮 ¡Nuevas misiones disponibles!',
+    body:     'Instala juegos y gana monedas extra hoy.',
+    audience: 'all',
+  },
+  surveys: {
+    title:    '📋 ¡Hay encuestas para ti!',
+    body:     'Completa encuestas y gana hasta $0.60 USD cada una.',
+    audience: 'all',
+  },
+  streak: {
+    title:    '🔥 ¡No pierdas tu racha!',
+    body:     'Entra hoy y mantén tu racha activa. ¡Hay bonos esperándote!',
+    audience: 'all',
+  },
+  ranking: {
+    title:    '🏆 ¡El ranking semanal reinicia pronto!',
+    body:     'Gana más monedas antes del cierre y llévate el premio.',
+    audience: 'all',
+  },
+};
+
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
@@ -67,7 +95,7 @@ export const revalidate = 0;
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; tab?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string }>;
 }) {
   const [requests, stats, sp] = await Promise.all([
     getCashoutRequests(),
@@ -78,7 +106,16 @@ export default async function AdminPage({
   const successMsg  = sp.success;
   const errorMsg    = sp.error;
   const activeTab   = sp.tab ?? 'retiros';
+  const activePreset = sp.preset ?? '';
+  const sentCount   = sp.sent   ? Number(sp.sent)   : null;
+  const totalCount  = sp.total  ? Number(sp.total)  : null;
   const pending     = requests.filter((r: any) => r.status === 'pending' || r.status === 'processing');
+
+  // Pre-fill compose form from selected preset (or last sent values)
+  const presetData  = activePreset ? PRESETS[activePreset] : null;
+  const formTitle   = presetData?.title    ?? '';
+  const formBody    = presetData?.body     ?? '';
+  const formAudience = presetData?.audience ?? 'all';
 
   return (
     <html lang="es">
@@ -255,6 +292,7 @@ export default async function AdminPage({
           {successMsg === 'aprobado'    && <div className="alert alert-success">✅ Marcado como pagado. Recuerda enviar el dinero manualmente por PayPal.</div>}
           {successMsg === 'en_revision' && <div className="alert alert-info">🔍 Solicitud en revisión. El usuario ya lo puede ver en la app.</div>}
           {successMsg === 'rechazado'   && <div className="alert alert-error">🚫 Retiro rechazado. Monedas devueltas y usuario notificado.</div>}
+          {successMsg === 'enviado'     && <div className="alert alert-success">📤 Notificación enviada a {sentCount ?? '?'}{totalCount != null ? ` de ${totalCount}` : ''} dispositivos.</div>}
           {errorMsg === 'ya_procesado'  && <div className="alert alert-error">⚠️ Este retiro ya fue procesado anteriormente.</div>}
           {errorMsg && errorMsg !== 'ya_procesado' && <div className="alert alert-error">❌ {decodeURIComponent(errorMsg)}</div>}
 
@@ -463,141 +501,83 @@ export default async function AdminPage({
           {/* TAB: NOTIFICACIONES */}
           {activeTab === 'notificaciones' && <div>
 
-            {/* Presets */}
+            {/* Presets — cada uno es un link que navega a ?preset=X y recarga la página con el form pre-llenado */}
             <div className="notify-card">
               <div className="notify-card-title">⚡ Envíos rápidos</div>
-              <div className="notify-card-sub">Selecciona un preset para precargar el mensaje. Puedes editarlo antes de enviar.</div>
+              <div className="notify-card-sub">Toca un preset para cargar el mensaje en el formulario de abajo.</div>
               <div className="presets-grid">
-                <button className="preset-btn" {...{'onclick': "loadPreset('daily_bonus', this)"}}>
+                <a href="/admin?tab=notificaciones&preset=daily_bonus" className={`preset-btn${activePreset === 'daily_bonus' ? ' active' : ''}`}>
                   <span className="preset-emoji">🎁</span>
                   <span className="preset-name">Bono diario</span>
                   <span className="preset-desc">Sin reclamar hoy</span>
-                </button>
-                <button className="preset-btn" {...{'onclick': "loadPreset('new_games', this)"}}>
+                </a>
+                <a href="/admin?tab=notificaciones&preset=new_games" className={`preset-btn${activePreset === 'new_games' ? ' active' : ''}`}>
                   <span className="preset-emoji">🎮</span>
                   <span className="preset-name">Nuevas misiones</span>
                   <span className="preset-desc">Todos activos (30d)</span>
-                </button>
-                <button className="preset-btn" {...{'onclick': "loadPreset('surveys', this)"}}>
+                </a>
+                <a href="/admin?tab=notificaciones&preset=surveys" className={`preset-btn${activePreset === 'surveys' ? ' active' : ''}`}>
                   <span className="preset-emoji">📋</span>
                   <span className="preset-name">Hay encuestas</span>
                   <span className="preset-desc">Todos activos</span>
-                </button>
-                <button className="preset-btn" {...{'onclick': "loadPreset('streak', this)"}}>
+                </a>
+                <a href="/admin?tab=notificaciones&preset=streak" className={`preset-btn${activePreset === 'streak' ? ' active' : ''}`}>
                   <span className="preset-emoji">🔥</span>
                   <span className="preset-name">Cuida tu racha</span>
                   <span className="preset-desc">Todos activos</span>
-                </button>
-                <button className="preset-btn" {...{'onclick': "loadPreset('ranking', this)"}}>
+                </a>
+                <a href="/admin?tab=notificaciones&preset=ranking" className={`preset-btn${activePreset === 'ranking' ? ' active' : ''}`}>
                   <span className="preset-emoji">🏆</span>
                   <span className="preset-name">Ranking semanal</span>
                   <span className="preset-desc">Todos activos</span>
-                </button>
+                </a>
               </div>
             </div>
 
-            {/* Compose */}
+            {/* Compose — form HTML nativo, POST directo, sin JS */}
             <div className="notify-card">
               <div className="notify-card-title">✏️ Componer notificación</div>
-              <div className="notify-card-sub">Edita el mensaje y elige la audiencia antes de enviar.</div>
-
-              <div className="form-group">
-                <label className="form-label">Título</label>
-                <input id="notif-title" className="form-input" placeholder="ej: 🎉 ¡Novedad en JUEGALO!" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Mensaje</label>
-                <textarea id="notif-body" className="form-textarea" placeholder="ej: Tenemos una sorpresa para ti. ¡Entra y descúbrela!" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Audiencia</label>
-                <select id="notif-audience" className="form-select" style={{ maxWidth: 280 }}>
-                  <option value="all">Todos los activos (últimos 30 días)</option>
-                  <option value="unclaimed_bonus">Solo los que no reclamaron bono hoy</option>
-                </select>
+              <div className="notify-card-sub">
+                {activePreset
+                  ? `Preset "${PRESETS[activePreset]?.title ?? activePreset}" cargado. Edita si quieres y luego envía.`
+                  : 'Selecciona un envío rápido arriba o escribe tu propio mensaje.'}
               </div>
 
-              <button className="send-btn" {...{'onclick': "sendCustom()"}}>📤 Enviar notificación</button>
-              <div id="notify-result" className="notify-result" />
+              <form method="POST" action="/admin/notify-form">
+                <div className="form-group">
+                  <label className="form-label">Título</label>
+                  <input
+                    name="title"
+                    className="form-input"
+                    placeholder="ej: 🎉 ¡Novedad en JUEGALO!"
+                    defaultValue={formTitle}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mensaje</label>
+                  <textarea
+                    name="message"
+                    className="form-textarea"
+                    placeholder="ej: Tenemos una sorpresa para ti. ¡Entra y descúbrela!"
+                    defaultValue={formBody}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Audiencia</label>
+                  <select name="audience" className="form-select" style={{ maxWidth: 280 }} defaultValue={formAudience}>
+                    <option value="all">Todos los activos (últimos 30 días)</option>
+                    <option value="unclaimed_bonus">Solo los que no reclamaron bono hoy</option>
+                  </select>
+                </div>
+                <button type="submit" className="send-btn">📤 Enviar notificación</button>
+              </form>
             </div>
 
           </div>}
 
         </main>
-
-        <script dangerouslySetInnerHTML={{ __html: `
-          const PRESETS = {
-            daily_bonus: {
-              title:    '🎁 ¡Tu bono diario te espera!',
-              body:     'Entra a JUEGALO y reclama tus monedas gratis de hoy.',
-              audience: 'unclaimed_bonus',
-            },
-            new_games: {
-              title:    '🎮 ¡Nuevas misiones disponibles!',
-              body:     'Instala juegos y gana monedas extra hoy.',
-              audience: 'all',
-            },
-            surveys: {
-              title:    '📋 ¡Hay encuestas para ti!',
-              body:     'Completa encuestas y gana hasta $0.60 USD cada una.',
-              audience: 'all',
-            },
-            streak: {
-              title:    '🔥 ¡No pierdas tu racha!',
-              body:     'Entra hoy y mantén tu racha activa. ¡Hay bonos esperándote!',
-              audience: 'all',
-            },
-            ranking: {
-              title:    '🏆 ¡El ranking semanal reinicia pronto!',
-              body:     'Gana más monedas antes del cierre y llévate el premio.',
-              audience: 'all',
-            },
-          };
-
-          function loadPreset(key, btn) {
-            const p = PRESETS[key];
-            if (!p) return;
-            document.getElementById('notif-title').value    = p.title;
-            document.getElementById('notif-body').value     = p.body;
-            document.getElementById('notif-audience').value = p.audience;
-            // Highlight active preset
-            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            // Clear previous result
-            showResult('', '');
-            // Scroll to compose
-            document.getElementById('notif-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-
-          async function sendCustom() {
-            const title    = document.getElementById('notif-title').value.trim();
-            const message  = document.getElementById('notif-body').value.trim();
-            const audience = document.getElementById('notif-audience').value;
-            if (!title || !message) { showResult('err', '⚠️ Completa el título y el mensaje antes de enviar.'); return; }
-            showResult('loading', '⏳ Enviando notificación…');
-            try {
-              const res  = await fetch('/admin/notify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, message, audience }),
-              });
-              const data = await res.json();
-              if (res.ok) {
-                showResult('ok', '✅ Enviada a ' + data.sent + ' de ' + data.total + ' dispositivos activos.');
-                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-              } else {
-                showResult('err', '❌ Error: ' + (data.error ?? 'desconocido'));
-              }
-            } catch(e) { showResult('err', '❌ Error de red. Intenta de nuevo.'); }
-          }
-
-          function showResult(cls, msg) {
-            const el = document.getElementById('notify-result');
-            el.className = 'notify-result' + (cls ? ' ' + cls : '');
-            el.textContent = msg;
-          }
-
-        `}} />
 
       </body>
     </html>
