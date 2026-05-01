@@ -458,7 +458,7 @@ export default async function AdminPage({
                 </table>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* TAB: NOTIFICACIONES */}
           {activeTab === 'notificaciones' && <div>
@@ -521,7 +521,7 @@ export default async function AdminPage({
               <div id="notify-result" className="notify-result" />
             </div>
 
-          </div>
+          </div>}
 
         </main>
 
