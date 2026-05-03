@@ -13,7 +13,7 @@ import { supabase, creditCoins } from '../../../../lib/supabase';
  *   trans_id     — ID único de la transacción CPX
  *   amount_local — monedas a acreditar (configurado en CPX → Reward Settings)
  *   status       — 1=completada, 2=cancelada/chargeback
- *   hash         — MD5(user_id + app_id + hash_key) para validar autenticidad
+ *   hash         — MD5(trans_id + "-" + secure_hash_key) para validar autenticidad
  *
  * CPX espera respuesta "1" en texto plano para confirmar recepción.
  */
@@ -38,13 +38,13 @@ export async function GET(req: NextRequest) {
     return new NextResponse('1'); // CPX requiere "1" aunque no acreditemos
   }
 
-  // ── Verificar hash — MD5(user_id + app_id + hash_key) ───────────
-  const appId   = process.env.CPX_RESEARCH_APP_ID!;
+  // ── Verificar hash — MD5(trans_id + "-" + secure_hash_key) ────────
+  // Fórmula oficial CPX: md5({trans_id}-yourappsecurehash)
   const hashKey = process.env.CPX_RESEARCH_SECRET!;
 
   const expectedHash = crypto
     .createHash('md5')
-    .update(`${userId}${appId}${hashKey}`)
+    .update(`${transId}-${hashKey}`)
     .digest('hex');
 
   if (hash !== expectedHash) {
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
       coins,
       'cpx_research',
       `Encuesta completada CPX`,
-      { trans_id: transId, amount_local: coins, app_id: appId }
+      { trans_id: transId, amount_local: coins }
     );
 
     console.log(`[CPX] ✅ ${coins} monedas → usuario ${userId} | trans_id: ${transId}`);
