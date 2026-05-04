@@ -67,7 +67,9 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Acreditar monedas ────────────────────────────────────────────
-  const coins = parseInt(amountStr, 10);
+  // amount_local ya refleja el margen configurado en CPX → Reward Settings
+  // (Currency Factor = 600 → usuario recibe 60% del valor de la encuesta)
+  const coins = Math.floor(parseFloat(amountStr));
   if (isNaN(coins) || coins <= 0) {
     console.warn('[CPX] Monto inválido:', amountStr);
     return new NextResponse('0', { status: 400 });

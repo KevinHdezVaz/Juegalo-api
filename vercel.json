@@ -3,8 +3,8 @@
   "regions": ["iad1"],
   "crons": [
     {
-      "path": "/api/cron/weekly-reset",
-      "schedule": "0 6 * * 1"
+      "path": "/api/notify/ranking-winners",
+      "schedule": "30 0 * * 1"
     },
     {
       "path": "/api/notify/daily-bonus",
