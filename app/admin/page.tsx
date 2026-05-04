@@ -75,6 +75,21 @@ async function getStats() {
   };
 }
 
+// Parsea "correo@paypal.com | MXN" → { account, currency }
+function parseDetail(raw: string | null | undefined): { account: string; currency: string | null } {
+  if (!raw) return { account: '—', currency: null };
+  const parts = raw.split('|');
+  if (parts.length >= 2) {
+    return { account: parts[0].trim(), currency: parts[1].trim() };
+  }
+  return { account: raw.trim(), currency: null };
+}
+
+const CURRENCY_FLAGS: Record<string, string> = {
+  USD: '🇺🇸', MXN: '🇲🇽', ARS: '🇦🇷', COP: '🇨🇴',
+  BRL: '🇧🇷', PEN: '🇵🇪', CLP: '🇨🇱', EUR: '🇪🇺',
+};
+
 const METHOD_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   paypal:      { label: 'PayPal',      color: '#003087', bg: '#EEF2FF', border: '#C7D2FE' },
   mercadopago: { label: 'MercadoPago', color: '#0070BA', bg: '#E0F2FE', border: '#BAE6FD' },
@@ -389,7 +404,12 @@ export default async function AdminPage({
                                 <span className="method-dot" style={{ background: m.color }} />{m.label}
                               </span>
                             </td>
-                            <td><span className="account-text">{r.payment_detail ?? r.account ?? '—'}</span></td>
+                            <td>
+                              {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
+                                <span className="account-text">{account}</span>
+                                {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
+                              </>); })()}
+                            </td>
                             <td>
                               <div className="date-main">{new Date(r.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                               <div className="date-time">{new Date(r.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -460,7 +480,10 @@ export default async function AdminPage({
                             </span>
                           </td>
                           <td style={{ maxWidth: 260 }}>
-                            <span className="account-text">{r.payment_detail ?? r.account ?? '—'}</span>
+                            {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
+                              <span className="account-text">{account}</span>
+                              {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
+                            </>); })()}
                             {r.notes && <div className={`notes-text${isError ? ' error' : ''}`}>{r.notes}</div>}
                           </td>
                           <td>
