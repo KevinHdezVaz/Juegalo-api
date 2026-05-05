@@ -1,6 +1,6 @@
 import React from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { getAdMobReport } from '../../lib/admob';
+import { getAdMobReport, getAdMobPeriods } from '../../lib/admob';
 
 const PRESETS: Record<string, { title: string; body: string; audience: string }> = {
   daily_bonus: {
@@ -132,11 +132,12 @@ export default async function AdminPage({
   const activeTab  = sp.tab ?? 'retiros';
   const admobDays  = Number(sp.days ?? 7);
 
-  const [requests, stats, admob, paidPeriod] = await Promise.all([
+  const [requests, stats, admob, paidPeriod, periods] = await Promise.all([
     getCashoutRequests(),
     getStats(),
     getAdMobReport(admobDays),
     getPaidByPeriod(admobDays),
+    getAdMobPeriods(),
   ]);
   const successMsg  = sp.success ?? '';
   const errorMsg    = sp.error   ?? '';
@@ -331,6 +332,19 @@ export default async function AdminPage({
           .admob-days-btn { padding:6px 14px; border-radius:8px; border:1.5px solid #E2E8F0; background:#F8FAFC; color:#64748B; font-size:12px; font-weight:700; text-decoration:none; transition:all .15s; }
           .admob-days-btn:hover { border-color:#6366F1; color:#4338CA; background:#EEF2FF; }
           .admob-days-btn.active { border-color:#6366F1; background:#6366F1; color:#fff; }
+
+          /* PERÍODOS ADMOB */
+          .period-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+          .period-card { background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.04); position:relative; overflow:hidden; }
+          .period-card::after { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:14px 14px 0 0; }
+          .period-card.today::after     { background:linear-gradient(90deg,#6366F1,#818CF8); }
+          .period-card.yesterday::after { background:linear-gradient(90deg,#0EA5E9,#38BDF8); }
+          .period-card.month::after     { background:linear-gradient(90deg,#10B981,#34D399); }
+          .period-card.lastmonth::after { background:linear-gradient(90deg,#F59E0B,#FCD34D); }
+          .period-label { font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+          .period-value { font-size:28px; font-weight:900; letter-spacing:-1.5px; line-height:1; color:#0F172A; }
+          .period-currency { font-size:13px; font-weight:600; color:#94A3B8; margin-left:3px; }
+          .period-sub { font-size:11px; color:#94A3B8; margin-top:4px; }
 
           /* RENTABILIDAD */
           .profit-banner { border-radius:16px; padding:24px 28px; margin-bottom:20px; border:1px solid transparent; }
@@ -603,6 +617,44 @@ export default async function AdminPage({
 
           {/* TAB: ADMOB */}
           {activeTab === 'admob' && <div>
+
+            {/* Tarjetas hoy / ayer / este mes / mes pasado */}
+            <div className="period-grid">
+              <div className="period-card today">
+                <div className="period-label">📅 Hoy</div>
+                <div className="period-value">
+                  {periods.today.toFixed(2)}
+                  <span className="period-currency">MXN</span>
+                </div>
+                <div className="period-sub">Estimado · puede cambiar</div>
+              </div>
+              <div className="period-card yesterday">
+                <div className="period-label">🗓️ Ayer</div>
+                <div className="period-value">
+                  {periods.yesterday.toFixed(2)}
+                  <span className="period-currency">MXN</span>
+                </div>
+                <div className="period-sub">Dato final</div>
+              </div>
+              <div className="period-card month">
+                <div className="period-label">📆 Este mes</div>
+                <div className="period-value">
+                  {periods.thisMonth.toFixed(2)}
+                  <span className="period-currency">MXN</span>
+                </div>
+                <div className="period-sub">Del día 1 a hoy</div>
+              </div>
+              <div className="period-card lastmonth">
+                <div className="period-label">📋 Mes pasado</div>
+                <div className="period-value">
+                  {periods.lastMonth.toFixed(2)}
+                  <span className="period-currency">MXN</span>
+                </div>
+                <div className="period-sub">Mes anterior completo</div>
+              </div>
+            </div>
+
+            <hr className="divider" />
 
             {/* Selector de rango */}
             <div className="admob-days-select">
