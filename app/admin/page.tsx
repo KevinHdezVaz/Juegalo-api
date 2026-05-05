@@ -39,41 +39,55 @@ const MIN_CASHOUT_COINS = 10_000;
 const NEAR_CASHOUT_PCT  = 0.70;
 
 async function getCashoutRequests() {
-  const { data } = await supabase
-    .from('cashout_requests')
-    .select(`*, users(username, email, coins)`)
-    .order('created_at', { ascending: false })
-    .limit(200);
-  return data ?? [];
+  try {
+    const { data } = await supabase
+      .from('cashout_requests')
+      .select(`*, users(username, email, coins)`)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    return data ?? [];
+  } catch {
+    return [];
+  }
 }
 
-async function getStats() {
-  const [
-    { count: totalUsers },
-    { data: pending },
-    { data: paid },
-    { data: rejected },
-    { data: nearCashout },
-    { data: readyCashout },
-  ] = await Promise.all([
-    supabase.from('users').select('*', { count: 'exact', head: true }),
-    supabase.from('cashout_requests').select('amount_usd').eq('status', 'pending'),
-    supabase.from('cashout_requests').select('amount_usd').eq('status', 'paid'),
-    supabase.from('cashout_requests').select('id').eq('status', 'rejected'),
-    supabase.from('users').select('id').gte('coins', Math.floor(MIN_CASHOUT_COINS * NEAR_CASHOUT_PCT)).lt('coins', MIN_CASHOUT_COINS),
-    supabase.from('users').select('id').gte('coins', MIN_CASHOUT_COINS),
-  ]);
+const DEFAULT_STATS = {
+  totalUsers: 0, pendingCount: 0, pendingUsd: 0,
+  paidUsd: 0, paidCount: 0, rejectedCount: 0,
+  nearCashout: 0, readyCashout: 0,
+};
 
-  return {
-    totalUsers:    totalUsers ?? 0,
-    pendingCount:  pending?.length ?? 0,
-    pendingUsd:    pending?.reduce((s, r) => s + Number(r.amount_usd), 0) ?? 0,
-    paidUsd:       paid?.reduce((s, r) => s + Number(r.amount_usd), 0) ?? 0,
-    paidCount:     paid?.length ?? 0,
-    rejectedCount: rejected?.length ?? 0,
-    nearCashout:   nearCashout?.length ?? 0,
-    readyCashout:  readyCashout?.length ?? 0,
-  };
+async function getStats() {
+  try {
+    const [
+      { count: totalUsers },
+      { data: pending },
+      { data: paid },
+      { data: rejected },
+      { data: nearCashout },
+      { data: readyCashout },
+    ] = await Promise.all([
+      supabase.from('users').select('*', { count: 'exact', head: true }),
+      supabase.from('cashout_requests').select('amount_usd').eq('status', 'pending'),
+      supabase.from('cashout_requests').select('amount_usd').eq('status', 'paid'),
+      supabase.from('cashout_requests').select('id').eq('status', 'rejected'),
+      supabase.from('users').select('id').gte('coins', Math.floor(MIN_CASHOUT_COINS * NEAR_CASHOUT_PCT)).lt('coins', MIN_CASHOUT_COINS),
+      supabase.from('users').select('id').gte('coins', MIN_CASHOUT_COINS),
+    ]);
+
+    return {
+      totalUsers:    totalUsers ?? 0,
+      pendingCount:  pending?.length ?? 0,
+      pendingUsd:    pending?.reduce((s, r) => s + Number(r.amount_usd), 0) ?? 0,
+      paidUsd:       paid?.reduce((s, r) => s + Number(r.amount_usd), 0) ?? 0,
+      paidCount:     paid?.length ?? 0,
+      rejectedCount: rejected?.length ?? 0,
+      nearCashout:   nearCashout?.length ?? 0,
+      readyCashout:  readyCashout?.length ?? 0,
+    };
+  } catch {
+    return DEFAULT_STATS;
+  }
 }
 
 async function getPaidByPeriod(days: number): Promise<number> {
@@ -132,9 +146,14 @@ export default async function AdminPage({
   const activeTab  = sp.tab ?? 'retiros';
   const admobDays  = Number(sp.days ?? 7);
 
-  const [requests, stats, admob, paidPeriod, periods] = await Promise.all([
+  // Supabase — crítico, no debe bloquearse por AdMob
+  const [requests, stats] = await Promise.all([
     getCashoutRequests(),
     getStats(),
+  ]);
+
+  // AdMob + pagos — si fallan, la página igual carga con los retiros
+  const [admob, paidPeriod, periods] = await Promise.all([
     getAdMobReport(admobDays),
     getPaidByPeriod(admobDays),
     getAdMobPeriods(),
