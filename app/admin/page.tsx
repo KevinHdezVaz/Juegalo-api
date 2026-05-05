@@ -77,14 +77,18 @@ async function getStats() {
 }
 
 async function getPaidByPeriod(days: number): Promise<number> {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const { data } = await supabase
-    .from('cashout_requests')
-    .select('amount_usd')
-    .eq('status', 'paid')
-    .gte('processed_at', since.toISOString());
-  return data?.reduce((s, r) => s + Number(r.amount_usd), 0) ?? 0;
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - (isNaN(days) ? 7 : days));
+    const { data } = await supabase
+      .from('cashout_requests')
+      .select('amount_usd')
+      .eq('status', 'paid')
+      .gte('processed_at', since.toISOString());
+    return data?.reduce((s: number, r: any) => s + Number(r.amount_usd ?? 0), 0) ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 // Parsea "correo@paypal.com | MXN" → { account, currency }
@@ -141,11 +145,13 @@ export default async function AdminPage({
   const totalCount  = sp.total  ? Number(sp.total)  : null;
   const pending     = requests.filter((r: any) => r.status === 'pending' || r.status === 'processing');
 
-  // Rentabilidad AdMob
-  const netProfit     = admob.totalEarnings - paidPeriod;
-  const profitMargin  = admob.totalEarnings > 0 ? (netProfit / admob.totalEarnings) * 100 : -100;
-  const earningsPct   = admob.totalEarnings + paidPeriod > 0
-    ? (admob.totalEarnings / (admob.totalEarnings + paidPeriod)) * 100
+  // Rentabilidad AdMob (valores con guardia por si algo falla en runtime)
+  const safeEarnings  = Number.isFinite(admob?.totalEarnings) ? admob.totalEarnings : 0;
+  const safePaid      = Number.isFinite(paidPeriod) ? paidPeriod : 0;
+  const netProfit     = safeEarnings - safePaid;
+  const profitMargin  = safeEarnings > 0 ? (netProfit / safeEarnings) * 100 : (safePaid > 0 ? -100 : 0);
+  const earningsPct   = safeEarnings + safePaid > 0
+    ? (safeEarnings / (safeEarnings + safePaid)) * 100
     : 0;
   const isProfit      = netProfit >= 0;
 
@@ -624,7 +630,7 @@ export default async function AdminPage({
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 4 }}>Ratio ingresos / costos</div>
                   <div style={{ fontSize: 22, fontWeight: 900, color: '#0F172A', letterSpacing: -1 }}>
-                    {admob.totalEarnings.toFixed(2)} <span style={{ fontSize: 14, color: '#94A3B8' }}>vs</span> {paidPeriod.toFixed(2)}
+                    {safeEarnings.toFixed(2)} <span style={{ fontSize: 14, color: '#94A3B8' }}>vs</span> {safePaid.toFixed(2)}
                   </div>
                   <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>AdMob vs PayPal / MercadoPago</div>
                 </div>
@@ -634,12 +640,12 @@ export default async function AdminPage({
               <div className="profit-cols" style={{ marginTop: 16 }}>
                 <div className="profit-col earnings">
                   <div className="profit-col-label earnings">💰 Ingresos AdMob</div>
-                  <div className="profit-col-value earnings">${admob.totalEarnings.toFixed(2)}</div>
-                  <div className="profit-col-sub">{admob.totalImpressions.toLocaleString()} impresiones · eCPM ${admob.avgEcpm.toFixed(2)}</div>
+                  <div className="profit-col-value earnings">${safeEarnings.toFixed(2)}</div>
+                  <div className="profit-col-sub">{(admob?.totalImpressions ?? 0).toLocaleString()} impresiones · eCPM ${(admob?.avgEcpm ?? 0).toFixed(2)}</div>
                 </div>
                 <div className="profit-col costs">
                   <div className="profit-col-label costs">💸 Pagado a usuarios</div>
-                  <div className="profit-col-value costs">${paidPeriod.toFixed(2)}</div>
+                  <div className="profit-col-value costs">${safePaid.toFixed(2)}</div>
                   <div className="profit-col-sub">Retiros completados en el período</div>
                 </div>
               </div>
