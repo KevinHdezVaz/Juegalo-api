@@ -76,6 +76,17 @@ async function getStats() {
   };
 }
 
+async function getPaidByPeriod(days: number): Promise<number> {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const { data } = await supabase
+    .from('cashout_requests')
+    .select('amount_usd')
+    .eq('status', 'paid')
+    .gte('processed_at', since.toISOString());
+  return data?.reduce((s, r) => s + Number(r.amount_usd), 0) ?? 0;
+}
+
 // Parsea "correo@paypal.com | MXN" → { account, currency }
 function parseDetail(raw: string | null | undefined): { account: string; currency: string | null } {
   if (!raw) return { account: '—', currency: null };
@@ -113,21 +124,30 @@ export default async function AdminPage({
 }: {
   searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string; days?: string }>;
 }) {
-  const [requests, stats, admob, sp] = await Promise.all([
+  const sp = await searchParams;
+  const activeTab  = sp.tab ?? 'retiros';
+  const admobDays  = Number(sp.days ?? 7);
+
+  const [requests, stats, admob, paidPeriod] = await Promise.all([
     getCashoutRequests(),
     getStats(),
-    getAdMobReport(7),
-    searchParams,
+    getAdMobReport(admobDays),
+    getPaidByPeriod(admobDays),
   ]);
-
-  const successMsg  = sp.success;
-  const errorMsg    = sp.error;
-  const activeTab   = sp.tab ?? 'retiros';
-  const admobDays   = sp.tab === 'admob' ? Number(sp.days ?? 7) : 7;
+  const successMsg  = sp.success ?? '';
+  const errorMsg    = sp.error   ?? '';
   const activePreset = sp.preset ?? '';
   const sentCount   = sp.sent   ? Number(sp.sent)   : null;
   const totalCount  = sp.total  ? Number(sp.total)  : null;
   const pending     = requests.filter((r: any) => r.status === 'pending' || r.status === 'processing');
+
+  // Rentabilidad AdMob
+  const netProfit     = admob.totalEarnings - paidPeriod;
+  const profitMargin  = admob.totalEarnings > 0 ? (netProfit / admob.totalEarnings) * 100 : -100;
+  const earningsPct   = admob.totalEarnings + paidPeriod > 0
+    ? (admob.totalEarnings / (admob.totalEarnings + paidPeriod)) * 100
+    : 0;
+  const isProfit      = netProfit >= 0;
 
   // Pre-fill compose form from selected preset (or last sent values)
   const presetData  = activePreset ? PRESETS[activePreset] : null;
@@ -305,6 +325,37 @@ export default async function AdminPage({
           .admob-days-btn { padding:6px 14px; border-radius:8px; border:1.5px solid #E2E8F0; background:#F8FAFC; color:#64748B; font-size:12px; font-weight:700; text-decoration:none; transition:all .15s; }
           .admob-days-btn:hover { border-color:#6366F1; color:#4338CA; background:#EEF2FF; }
           .admob-days-btn.active { border-color:#6366F1; background:#6366F1; color:#fff; }
+
+          /* RENTABILIDAD */
+          .profit-banner { border-radius:16px; padding:24px 28px; margin-bottom:20px; border:1px solid transparent; }
+          .profit-banner.positive { background:linear-gradient(135deg,#F0FDF4,#DCFCE7); border-color:#86EFAC; }
+          .profit-banner.negative { background:linear-gradient(135deg,#FFF1F2,#FEE2E2); border-color:#FCA5A5; }
+          .profit-banner-top { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; }
+          .profit-banner-title { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px; }
+          .profit-banner-title.positive { color:#15803D; }
+          .profit-banner-title.negative { color:#B91C1C; }
+          .profit-banner-amount { font-size:38px; font-weight:900; letter-spacing:-2px; line-height:1; }
+          .profit-banner-amount.positive { color:#166534; }
+          .profit-banner-amount.negative { color:#991B1B; }
+          .profit-banner-sub { font-size:12px; margin-top:4px; font-weight:500; }
+          .profit-banner-sub.positive { color:#15803D; }
+          .profit-banner-sub.negative { color:#B91C1C; }
+          .profit-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+          .profit-col { background:#fff; border-radius:12px; padding:14px 16px; border:1px solid transparent; }
+          .profit-col.earnings { border-color:#BBF7D0; }
+          .profit-col.costs    { border-color:#FCA5A5; }
+          .profit-col-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+          .profit-col-label.earnings { color:#15803D; }
+          .profit-col-label.costs    { color:#B91C1C; }
+          .profit-col-value { font-size:26px; font-weight:900; letter-spacing:-1px; }
+          .profit-col-value.earnings { color:#166534; }
+          .profit-col-value.costs    { color:#991B1B; }
+          .profit-col-sub { font-size:11px; color:#94A3B8; margin-top:3px; }
+          .profit-bar-wrap { margin-top:16px; }
+          .profit-bar-label { display:flex; justify-content:space-between; font-size:11px; font-weight:600; margin-bottom:5px; }
+          .profit-bar-track { height:12px; border-radius:6px; background:#FEE2E2; overflow:hidden; }
+          .profit-bar-fill  { height:100%; border-radius:6px; background:linear-gradient(90deg,#10B981,#059669); transition:width .6s; }
+          .profit-bar-labels { display:flex; justify-content:space-between; font-size:10px; color:#94A3B8; margin-top:4px; }
         `}</style>
       </head>
       <body>
@@ -554,6 +605,59 @@ export default async function AdminPage({
                   Últimos {d} días
                 </a>
               ))}
+            </div>
+
+            {/* ── RENTABILIDAD ─────────────────────────────────── */}
+            <div className={`profit-banner ${isProfit ? 'positive' : 'negative'}`}>
+              <div className="profit-banner-top">
+                <div>
+                  <div className={`profit-banner-title ${isProfit ? 'positive' : 'negative'}`}>
+                    {isProfit ? '📈 Ganancia neta' : '📉 Pérdida neta'} · últimos {admobDays} días
+                  </div>
+                  <div className={`profit-banner-amount ${isProfit ? 'positive' : 'negative'}`}>
+                    {isProfit ? '+' : ''}{netProfit.toFixed(2)} <span style={{ fontSize: 18 }}>USD</span>
+                  </div>
+                  <div className={`profit-banner-sub ${isProfit ? 'positive' : 'negative'}`}>
+                    Margen: {profitMargin.toFixed(1)}% · {isProfit ? 'La app está siendo rentable ✅' : 'Pagamos más de lo que ganamos ⚠️'}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 4 }}>Ratio ingresos / costos</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: '#0F172A', letterSpacing: -1 }}>
+                    {admob.totalEarnings.toFixed(2)} <span style={{ fontSize: 14, color: '#94A3B8' }}>vs</span> {paidPeriod.toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>AdMob vs PayPal / MercadoPago</div>
+                </div>
+              </div>
+
+              {/* Columnas */}
+              <div className="profit-cols" style={{ marginTop: 16 }}>
+                <div className="profit-col earnings">
+                  <div className="profit-col-label earnings">💰 Ingresos AdMob</div>
+                  <div className="profit-col-value earnings">${admob.totalEarnings.toFixed(2)}</div>
+                  <div className="profit-col-sub">{admob.totalImpressions.toLocaleString()} impresiones · eCPM ${admob.avgEcpm.toFixed(2)}</div>
+                </div>
+                <div className="profit-col costs">
+                  <div className="profit-col-label costs">💸 Pagado a usuarios</div>
+                  <div className="profit-col-value costs">${paidPeriod.toFixed(2)}</div>
+                  <div className="profit-col-sub">Retiros completados en el período</div>
+                </div>
+              </div>
+
+              {/* Barra visual */}
+              <div className="profit-bar-wrap">
+                <div className="profit-bar-label">
+                  <span style={{ color: '#15803D', fontWeight: 700 }}>Ingresos (AdMob)</span>
+                  <span style={{ color: '#B91C1C', fontWeight: 700 }}>Costos (Pagos)</span>
+                </div>
+                <div className="profit-bar-track">
+                  <div className="profit-bar-fill" style={{ width: `${Math.min(earningsPct, 100).toFixed(1)}%` }} />
+                </div>
+                <div className="profit-bar-labels">
+                  <span>{earningsPct.toFixed(0)}% ingresos</span>
+                  <span>{(100 - earningsPct).toFixed(0)}% costos</span>
+                </div>
+              </div>
             </div>
 
             {admob.error ? (
