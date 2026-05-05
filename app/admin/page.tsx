@@ -1,5 +1,6 @@
 import React from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { getAdMobReport } from '../../lib/admob';
 
 const PRESETS: Record<string, { title: string; body: string; audience: string }> = {
   daily_bonus: {
@@ -110,17 +111,19 @@ export const revalidate = 0;
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string; days?: string }>;
 }) {
-  const [requests, stats, sp] = await Promise.all([
+  const [requests, stats, admob, sp] = await Promise.all([
     getCashoutRequests(),
     getStats(),
+    getAdMobReport(7),
     searchParams,
   ]);
 
   const successMsg  = sp.success;
   const errorMsg    = sp.error;
   const activeTab   = sp.tab ?? 'retiros';
+  const admobDays   = sp.tab === 'admob' ? Number(sp.days ?? 7) : 7;
   const activePreset = sp.preset ?? '';
   const sentCount   = sp.sent   ? Number(sp.sent)   : null;
   const totalCount  = sp.total  ? Number(sp.total)  : null;
@@ -286,6 +289,22 @@ export default async function AdminPage({
           .notify-result.loading { display:block; background:#F8FAFC; color:#475569; border:1px solid #E2E8F0; }
 
           .divider { border:none; border-top:1.5px solid #F1F5F9; margin:20px 0; }
+
+          /* ADMOB */
+          .admob-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+          .admob-kpi  { background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+          .admob-kpi-label { font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+          .admob-kpi-value { font-size:26px; font-weight:900; color:#0F172A; letter-spacing:-1px; line-height:1; }
+          .admob-kpi-sub   { font-size:11px; color:#94A3B8; margin-top:3px; }
+
+          .admob-table-wrap { background:#fff; border:1px solid #E2E8F0; border-radius:16px; overflow:hidden; margin-bottom:24px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+          .admob-bar-cell { display:flex; align-items:center; gap:8px; }
+          .admob-bar { height:6px; border-radius:3px; background:linear-gradient(90deg,#6366F1,#818CF8); min-width:2px; }
+          .admob-error { background:#FFF1F2; border:1px solid #FECDD3; border-radius:12px; padding:16px 20px; color:#991B1B; font-size:13px; font-weight:600; }
+          .admob-days-select { display:flex; gap:6px; margin-bottom:16px; }
+          .admob-days-btn { padding:6px 14px; border-radius:8px; border:1.5px solid #E2E8F0; background:#F8FAFC; color:#64748B; font-size:12px; font-weight:700; text-decoration:none; transition:all .15s; }
+          .admob-days-btn:hover { border-color:#6366F1; color:#4338CA; background:#EEF2FF; }
+          .admob-days-btn.active { border-color:#6366F1; background:#6366F1; color:#fff; }
         `}</style>
       </head>
       <body>
@@ -360,6 +379,9 @@ export default async function AdminPage({
             </a>
             <a href="/admin?tab=notificaciones" className={`tab-btn ${activeTab === 'notificaciones' ? 'active' : ''}`}>
               🔔 Notificaciones
+            </a>
+            <a href="/admin?tab=admob" className={`tab-btn ${activeTab === 'admob' ? 'active' : ''}`}>
+              📊 AdMob
             </a>
           </div>
 
@@ -520,6 +542,113 @@ export default async function AdminPage({
                 </table>
               )}
             </div>
+          </div>}
+
+          {/* TAB: ADMOB */}
+          {activeTab === 'admob' && <div>
+
+            {/* Selector de rango */}
+            <div className="admob-days-select">
+              {[7, 14, 30].map(d => (
+                <a key={d} href={`/admin?tab=admob&days=${d}`} className={`admob-days-btn ${admobDays === d ? 'active' : ''}`}>
+                  Últimos {d} días
+                </a>
+              ))}
+            </div>
+
+            {admob.error ? (
+              <div className="admob-error">
+                ⚠️ No se pudo cargar AdMob: {admob.error}
+                <div style={{ marginTop: 8, fontSize: 12, color: '#64748B', fontWeight: 400 }}>
+                  Verifica que <code>ADMOB_SERVICE_ACCOUNT</code> y <code>ADMOB_PUBLISHER_ID</code> estén configuradas en Vercel,
+                  y que la cuenta de servicio esté autorizada en AdMob Console → Configuración → Acceso a la API.
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* KPIs */}
+                <div className="admob-kpis">
+                  <div className="admob-kpi">
+                    <div className="admob-kpi-label">💰 Ingresos estimados</div>
+                    <div className="admob-kpi-value">${admob.totalEarnings.toFixed(2)}</div>
+                    <div className="admob-kpi-sub">USD · últimos {admobDays} días</div>
+                  </div>
+                  <div className="admob-kpi">
+                    <div className="admob-kpi-label">👁️ Impresiones</div>
+                    <div className="admob-kpi-value">{admob.totalImpressions.toLocaleString()}</div>
+                    <div className="admob-kpi-sub">últimos {admobDays} días</div>
+                  </div>
+                  <div className="admob-kpi">
+                    <div className="admob-kpi-label">🖱️ Clics</div>
+                    <div className="admob-kpi-value">{admob.totalClicks.toLocaleString()}</div>
+                    <div className="admob-kpi-sub">CTR: {admob.totalImpressions > 0 ? ((admob.totalClicks / admob.totalImpressions) * 100).toFixed(2) : '0.00'}%</div>
+                  </div>
+                  <div className="admob-kpi">
+                    <div className="admob-kpi-label">📈 eCPM promedio</div>
+                    <div className="admob-kpi-value">${admob.avgEcpm.toFixed(2)}</div>
+                    <div className="admob-kpi-sub">USD por 1,000 imp.</div>
+                  </div>
+                </div>
+
+                {/* Tabla por día */}
+                {admob.rows.length === 0 ? (
+                  <div className="admob-error" style={{ background: '#F8FAFC', borderColor: '#E2E8F0', color: '#475569' }}>
+                    📭 Sin datos para este rango. Puede tardar 24–48 h en aparecer.
+                  </div>
+                ) : (
+                  <div className="admob-table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Fecha</th>
+                          <th>Ingresos (USD)</th>
+                          <th>Impresiones</th>
+                          <th>Clics</th>
+                          <th>eCPM</th>
+                          <th>Barras</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          const maxEarnings = Math.max(...admob.rows.map(r => r.earnings), 0.001);
+                          return admob.rows.map(r => {
+                            const y = r.date.substring(0, 4);
+                            const m = r.date.substring(4, 6);
+                            const d = r.date.substring(6, 8);
+                            const barWidth = Math.round((r.earnings / maxEarnings) * 120);
+                            return (
+                              <tr key={r.date}>
+                                <td><span className="date-main">{d}/{m}/{y}</span></td>
+                                <td><span className="amount-usd">${r.earnings.toFixed(4)}</span></td>
+                                <td>{r.impressions.toLocaleString()}</td>
+                                <td>{r.clicks.toLocaleString()}</td>
+                                <td>${r.ecpm.toFixed(2)}</td>
+                                <td>
+                                  <div className="admob-bar-cell">
+                                    <div className="admob-bar" style={{ width: barWidth }} />
+                                    <span style={{ fontSize: 11, color: '#94A3B8' }}>${r.earnings.toFixed(2)}</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          });
+                        })()}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{ background: '#F8FAFC' }}>
+                          <td style={{ fontWeight: 700, fontSize: 12, color: '#475569' }}>Total</td>
+                          <td><span className="amount-usd">${admob.totalEarnings.toFixed(4)}</span></td>
+                          <td style={{ fontWeight: 700 }}>{admob.totalImpressions.toLocaleString()}</td>
+                          <td style={{ fontWeight: 700 }}>{admob.totalClicks.toLocaleString()}</td>
+                          <td style={{ fontWeight: 700 }}>${admob.avgEcpm.toFixed(2)}</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
           </div>}
 
           {/* TAB: NOTIFICACIONES */}
