@@ -132,13 +132,24 @@ export default async function AdminPage({
   const activeTab  = sp.tab ?? 'retiros';
   const admobDays  = Number(sp.days ?? 7);
 
-  const [requests, stats, admob, paidPeriod, periods] = await Promise.all([
+  // Retiros y estadísticas — siempre, sin AdMob de por medio
+  const [requests, stats] = await Promise.all([
     getCashoutRequests(),
     getStats(),
-    getAdMobReport(admobDays),
-    getPaidByPeriod(admobDays),
-    getAdMobPeriods(),
   ]);
+
+  // AdMob — solo cuando el usuario está en el tab de AdMob
+  const [admob, paidPeriod, periods] = activeTab === 'admob'
+    ? await Promise.all([
+        getAdMobReport(admobDays),
+        getPaidByPeriod(admobDays),
+        getAdMobPeriods(),
+      ])
+    : [
+        { rows: [], totalEarnings: 0, totalImpressions: 0, totalClicks: 0, avgEcpm: 0 },
+        0,
+        { today: 0, yesterday: 0, thisMonth: 0, lastMonth: 0 },
+      ] as const;
   const successMsg  = sp.success ?? '';
   const errorMsg    = sp.error   ?? '';
   const activePreset = sp.preset ?? '';

@@ -32,6 +32,14 @@ export interface AdMobPeriods {
   error?:     string;
 }
 
+// ── Fetch con timeout de 8 segundos ─────────────────────────────
+function fetchWithTimeout(url: string, options: RequestInit, ms = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
+
 // ── Obtiene access token desde el refresh token ──────────────────
 async function getAccessToken(): Promise<string> {
   const clientId     = process.env.ADMOB_CLIENT_ID;
@@ -42,7 +50,7 @@ async function getAccessToken(): Promise<string> {
     throw new Error('Faltan env vars: ADMOB_CLIENT_ID, ADMOB_CLIENT_SECRET o ADMOB_REFRESH_TOKEN');
   }
 
-  const res = await fetch('https://oauth2.googleapis.com/token', {
+  const res = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -103,7 +111,7 @@ async function fetchNetworkReport(
     },
   };
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://admob.googleapis.com/v1/accounts/${publisherId}/networkReport:generate`,
     {
       method:  'POST',
