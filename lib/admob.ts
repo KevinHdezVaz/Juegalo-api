@@ -74,7 +74,7 @@ export async function getAdMobReport(days = 7): Promise<AdMobSummary> {
       reportSpec: {
         dateRange:      { startDate: fmt(start), endDate: fmt(end) },
         dimensions:     ['DATE'],
-        metrics:        ['ESTIMATED_EARNINGS', 'IMPRESSIONS', 'CLICKS', 'ECPM'],
+        metrics:        ['ESTIMATED_EARNINGS', 'IMPRESSIONS', 'CLICKS', 'IMPRESSION_RPM'],
         sortConditions: [{ dimension: 'DATE', order: 'ASCENDING' }],
       },
     };
@@ -115,7 +115,7 @@ export async function getAdMobReport(days = 7): Promise<AdMobSummary> {
         const earnings    = Number(metricValues.ESTIMATED_EARNINGS?.microsValue ?? 0) / 1_000_000;
         const impressions = Number(metricValues.IMPRESSIONS?.integerValue ?? 0);
         const clicks      = Number(metricValues.CLICKS?.integerValue ?? 0);
-        const ecpm        = Number(metricValues.ECPM?.microsValue ?? 0) / 1_000_000;
+        const ecpm        = Number(metricValues.IMPRESSION_RPM?.microsValue ?? 0) / 1_000_000;
 
         rows.push({ date, earnings, impressions, clicks, ecpm });
       } catch {
