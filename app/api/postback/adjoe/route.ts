@@ -8,72 +8,107 @@ import { creditCoins } from '../../../../lib/supabase';
  * Documentación: https://docs.adjoe.io/playtime/s2s-rewards
  *
  * Parámetros que envía adjoe:
- *   user_id        → el userId que pasamos al SDK (Supabase UID)
- *   reward         → monedas a acreditar (ya calculadas por adjoe según nuestra config)
- *   transaction_id → ID único del evento (para deduplicación)
- *   checksum       → HMAC-SHA256(secret, transaction_id + ":" + user_id + ":" + reward)
+ *   user_uuid   → Supabase UID del usuario (pasado al SDK en inicialización)
+ *   trans_uuid  → ID único de transacción (UUID v4, para deduplicación)
+ *   coin_amount → Monedas a acreditar (calculadas por adjoe según nuestra config)
+ *   currency    → Nombre de la moneda virtual ("Monedas")
+ *   sid         → Firma SHA1 de seguridad
+ *   device_id   → (opcional) ID del dispositivo
+ *   sdk_app_id  → (opcional) App ID del SDK (ej. com.kevinhv.juegalo)
+ *   reward_type → (opcional) Tipo: Playtime, Advance, AdvancePlus, etc.
+ *   placement   → (opcional) Lugar en la app donde se mostró el catálogo
+ *
+ * Fórmula del SID:
+ *   sha1(trans_uuid + user_uuid + currency + coin_amount + device_id + sdk_app_id + s2s_token)
+ *   Si device_id o sdk_app_id no están presentes, se omiten de la concatenación.
+ *
+ * IPs autorizadas de adjoe:
+ *   3.121.65.44 | 18.185.166.67 | 52.29.52.48
  */
+
+// IPs oficiales de adjoe (para referencia — Vercel no expone la IP del caller fácilmente)
+const ADJOE_IPS = new Set(['3.121.65.44', '18.185.166.67', '52.29.52.48']);
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
-  const userId        = searchParams.get('user_id');
-  const rewardStr     = searchParams.get('reward');
-  const transactionId = searchParams.get('transaction_id');
-  const checksum      = searchParams.get('checksum');
+  const userUuid    = searchParams.get('user_uuid');
+  const transUuid   = searchParams.get('trans_uuid');
+  const coinAmountStr = searchParams.get('coin_amount');
+  const currency    = searchParams.get('currency');
+  const sid         = searchParams.get('sid');
+  const deviceId    = searchParams.get('device_id')   ?? '';
+  const sdkAppId    = searchParams.get('sdk_app_id')  ?? '';
+  const rewardType  = searchParams.get('reward_type') ?? '';
+  const placement   = searchParams.get('placement')   ?? '';
 
-  // 1. Validar parámetros básicos
-  if (!userId || !rewardStr || !transactionId || !checksum) {
-    console.error('[adjoe] Parámetros faltantes:', { userId, rewardStr, transactionId, checksum });
+  // 1. Validar parámetros requeridos
+  if (!userUuid || !transUuid || !coinAmountStr || !currency || !sid) {
+    console.error('[adjoe] Parámetros faltantes:', { userUuid, transUuid, coinAmountStr, currency, sid });
     return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 });
   }
 
-  // 2. Verificar firma HMAC (anti-fraude)
-  const secret = process.env.ADJOE_S2S_SECRET;
-  if (!secret) {
-    console.error('[adjoe] ADJOE_S2S_SECRET no configurada');
+  // 2. Verificar firma SHA1 (anti-fraude)
+  //    sid = sha1(trans_uuid + user_uuid + currency + coin_amount + device_id + sdk_app_id + s2s_token)
+  //    Si device_id o sdk_app_id no están en la URL, se omiten de la concatenación
+  const s2sToken = process.env.ADJOE_S2S_TOKEN;
+  if (!s2sToken) {
+    console.error('[adjoe] ADJOE_S2S_TOKEN no configurada');
     return NextResponse.json({ error: 'Config error' }, { status: 500 });
   }
 
-  const rawString    = `${transactionId}:${userId}:${rewardStr}`;
-  const expectedHash = crypto
-    .createHmac('sha256', secret)
-    .update(rawString)
-    .digest('hex');
+  // Construir string según qué parámetros opcionales están presentes
+  const hasDeviceId  = !!searchParams.get('device_id');
+  const hasSdkAppId  = !!searchParams.get('sdk_app_id');
 
-  if (checksum !== expectedHash) {
-    console.error('[adjoe] Checksum inválido:', { received: checksum, expected: expectedHash });
-    return NextResponse.json({ error: 'Checksum inválido' }, { status: 403 });
+  let raw = transUuid + userUuid + currency + coinAmountStr;
+  if (hasDeviceId)  raw += deviceId;
+  if (hasSdkAppId)  raw += sdkAppId;
+  raw += s2sToken;
+
+  const expectedSid = crypto.createHash('sha1').update(raw).digest('hex');
+
+  if (sid !== expectedSid) {
+    console.error('[adjoe] SID inválido:', { received: sid, expected: expectedSid });
+    return NextResponse.json({ error: 'SID inválido' }, { status: 403 });
   }
 
-  // 3. Calcular monedas a acreditar
-  // adjoe ya nos envía el valor en nuestra moneda virtual (Monedas)
-  // según la config: 10,000 monedas = $1 USD, 60% revenue share
-  const coins = Math.floor(Number(rewardStr));
-
-  if (coins <= 0) {
+  // 3. Parsear y validar coin_amount
+  const coins = Math.floor(Number(coinAmountStr));
+  if (isNaN(coins) || coins <= 0) {
     return NextResponse.json({ ok: true, coins: 0 });
   }
 
-  // 4. Acreditar monedas (con deduplicación por transaction_id)
+  // 4. Acreditar monedas con deduplicación por trans_uuid
   try {
     await creditCoins(
-      userId,
+      userUuid,
       coins,
       'adjoe',
-      `adjoe Playtime: recompensa ganada`,
-      { transaction_id: transactionId, reward: rewardStr }
+      `adjoe ${rewardType || 'Playtime'}: ${coins} monedas${placement ? ` (${placement})` : ''}`,
+      {
+        trans_uuid:  transUuid,
+        coin_amount: coins,
+        currency,
+        reward_type: rewardType,
+        sdk_app_id:  sdkAppId,
+        placement,
+      }
     );
 
-    console.log(`[adjoe] ✅ ${coins} monedas → ${userId} (tx: ${transactionId})`);
+    console.log(`[adjoe] ✅ ${coins} monedas → ${userUuid} | tx: ${transUuid} | tipo: ${rewardType}`);
+
+    // adjoe espera HTTP 200 para confirmar éxito
     return NextResponse.json({ ok: true, coins });
 
   } catch (err: any) {
-    // Si el error es por transacción duplicada, responder OK para que adjoe no reintente
+    // Transacción duplicada — responder 200 para que adjoe no reintente
     if (err?.message?.includes('duplicate') || err?.code === '23505') {
-      console.warn(`[adjoe] Transacción duplicada ignorada: ${transactionId}`);
+      console.warn(`[adjoe] Transacción duplicada ignorada: ${transUuid}`);
       return NextResponse.json({ ok: true, duplicate: true });
     }
     console.error('[adjoe] Error acreditando:', err);
+    // Retornar 500 para que adjoe reintente (tiene retry por 12h)
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }
