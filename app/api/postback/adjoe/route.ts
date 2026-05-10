@@ -51,9 +51,22 @@ export async function GET(req: NextRequest) {
   // 2. Verificar firma SHA1 (anti-fraude)
   //    sid = sha1(trans_uuid + user_uuid + currency + coin_amount + device_id + sdk_app_id + s2s_token)
   //    Si device_id o sdk_app_id no están en la URL, se omiten de la concatenación
-  const s2sToken = process.env.ADJOE_S2S_TOKEN;
+
+  // Leer el token desde app_config (Supabase) o caer a env var como fallback
+  let s2sToken = process.env.ADJOE_S2S_TOKEN ?? '';
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!);
+    const { data } = await db
+      .from('app_config')
+      .select('value')
+      .eq('key', 'adjoe_s2s_token')
+      .maybeSingle();
+    if (data?.value) s2sToken = data.value;
+  } catch { /* usa env var */ }
+
   if (!s2sToken) {
-    console.error('[adjoe] ADJOE_S2S_TOKEN no configurada');
+    console.error('[adjoe] adjoe_s2s_token no configurado (ni Supabase ni env)');
     return NextResponse.json({ error: 'Config error' }, { status: 500 });
   }
 

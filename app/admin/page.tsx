@@ -138,10 +138,17 @@ export default async function AdminPage({
     getStats(),
   ]);
 
-  // Feature flags — solo cuando está en el tab de config
-  const flags = activeTab === 'config'
-    ? await supabase.from('feature_flags').select('key, enabled, label, description, updated_at').then(r => r.data ?? [])
-    : [];
+  // Feature flags + adjoe config — solo cuando está en el tab de config
+  const [flags, adjoeConfig]: [any[], Record<string, string>] = activeTab === 'config'
+    ? await Promise.all([
+        supabase.from('feature_flags').select('key, enabled, label, description, updated_at').then(r => r.data ?? []),
+        supabase.from('app_config').select('key, value, updated_at').in('key', ['adjoe_app_id', 'adjoe_s2s_token']).then(r => {
+          const map: Record<string, string> = {};
+          for (const row of r.data ?? []) map[row.key] = row.value ?? '';
+          return map;
+        }),
+      ])
+    : [[], {} as Record<string, string>];
 
   // AdMob — solo cuando el usuario está en el tab de AdMob
   const [admob, paidPeriod, periods] = activeTab === 'admob'
@@ -196,6 +203,22 @@ export default async function AdminPage({
           .nav-dot { width:8px; height:8px; border-radius:50%; background:#10B981; box-shadow:0 0 6px #10B981; }
           .nav-status { font-size:12px; color:#64748B; font-weight:500; }
           .refresh-btn { padding:6px 14px; border-radius:8px; background:#F8FAFC; border:1px solid #E2E8F0; color:#475569; font-size:12px; font-weight:600; text-decoration:none; }
+          .logout-btn  { padding:6px 14px; border-radius:8px; background:#FFF1F2; border:1px solid #FECDD3; color:#BE123C; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+          /* ADJOE CONFIG */
+          .adjoe-section { margin-top:28px; }
+          .adjoe-card { background:#fff; border:1px solid #E2E8F0; border-radius:16px; padding:22px 24px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+          .adjoe-card-title { font-size:14px; font-weight:700; color:#0F172A; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+          .adjoe-card-desc  { font-size:12px; color:#64748B; margin-bottom:18px; }
+          .adjoe-field { margin-bottom:14px; }
+          .adjoe-label { font-size:11px; font-weight:600; color:#64748B; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }
+          .adjoe-row { display:flex; gap:8px; align-items:stretch; }
+          .adjoe-input { flex:1; padding:10px 14px; border:1.5px solid #E2E8F0; border-radius:10px; font-size:13px; color:#0F172A; outline:none; font-family:inherit; transition:border-color .15s; }
+          .adjoe-input:focus { border-color:#6366F1; }
+          .adjoe-save-btn { padding:10px 18px; background:linear-gradient(135deg,#6366F1,#4F46E5); color:#fff; border:none; border-radius:10px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; }
+          .adjoe-save-btn:hover { opacity:.9; }
+          .adjoe-status { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; }
+          .adjoe-status.set   { background:#F0FDF4; color:#166534; border:1px solid #BBF7D0; }
+          .adjoe-status.unset { background:#FFF7ED; color:#92400E; border:1px solid #FED7AA; }
 
           /* MAIN */
           .main { padding:24px 32px 56px; max-width:1280px; margin:0 auto; }
@@ -426,6 +449,10 @@ export default async function AdminPage({
             <div className="nav-dot" />
             <span className="nav-status">En línea</span>
             <a className="refresh-btn" href="/admin">↻ Actualizar</a>
+            <form method="POST" action="/admin/auth" style={{ display:'inline' }}>
+              <input type="hidden" name="action" value="logout" />
+              <button type="submit" className="logout-btn">Cerrar sesión</button>
+            </form>
           </div>
         </nav>
 
@@ -907,6 +934,66 @@ export default async function AdminPage({
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* ── adjoe Integration ─────────────────────────────────────── */}
+            <div className="adjoe-section">
+              <div className="section-header" style={{ marginBottom: 14 }}>
+                <span className="section-title">🎮 adjoe Playtime</span>
+                <span className={`adjoe-status ${adjoeConfig['adjoe_app_id'] && adjoeConfig['adjoe_s2s_token'] ? 'set' : 'unset'}`}>
+                  {adjoeConfig['adjoe_app_id'] && adjoeConfig['adjoe_s2s_token'] ? '● Configurado' : '○ Pendiente'}
+                </span>
+              </div>
+
+              <div className="adjoe-card">
+                <div className="adjoe-card-title">
+                  🔑 Credenciales adjoe
+                </div>
+                <div className="adjoe-card-desc">
+                  Ingresa las credenciales que te dio Hakan (tu Account Manager de adjoe).
+                  El <strong>App ID</strong> va al SDK de Flutter. El <strong>S2S Token</strong> verifica los postbacks en el servidor.
+                </div>
+
+                {/* App ID */}
+                <div className="adjoe-field">
+                  <div className="adjoe-label">SDK App ID <span style={{ color:'#94A3B8', fontWeight:400, textTransform:'none' }}>(Publishers → Apps → tu app)</span></div>
+                  <form method="POST" action="/admin/config">
+                    <input type="hidden" name="key" value="adjoe_app_id" />
+                    <div className="adjoe-row">
+                      <input
+                        className="adjoe-input"
+                        type="text"
+                        name="value"
+                        defaultValue={adjoeConfig['adjoe_app_id'] ?? ''}
+                        placeholder="ej. a1b2c3d4e5f6..."
+                        spellCheck={false}
+                      />
+                      <button type="submit" className="adjoe-save-btn">Guardar</button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* S2S Token */}
+                <div className="adjoe-field" style={{ marginBottom: 0 }}>
+                  <div className="adjoe-label">S2S Token <span style={{ color:'#94A3B8', fontWeight:400, textTransform:'none' }}>(secreto — no compartir)</span></div>
+                  <form method="POST" action="/admin/config">
+                    <input type="hidden" name="key" value="adjoe_s2s_token" />
+                    <div className="adjoe-row">
+                      <input
+                        className="adjoe-input"
+                        type="password"
+                        name="value"
+                        defaultValue={adjoeConfig['adjoe_s2s_token'] ?? ''}
+                        placeholder={adjoeConfig['adjoe_s2s_token'] ? '••••••••••••••••' : 'Pega el token de Hakan aquí'}
+                        spellCheck={false}
+                        autoComplete="off"
+                      />
+                      <button type="submit" className="adjoe-save-btn">Guardar</button>
+                    </div>
+                  </form>
+                </div>
+
+              </div>
             </div>
 
           </div>}
