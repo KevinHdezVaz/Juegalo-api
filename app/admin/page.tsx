@@ -893,42 +893,21 @@ export default async function AdminPage({
                     <span className={`toggle-status ${flag.enabled ? 'on' : 'off'}`}>
                       {flag.enabled ? '● Activo' : '○ Inactivo'}
                     </span>
-                    <button
-                      className={`toggle-btn ${flag.enabled ? 'disable' : 'enable'}`}
-                      onClick={undefined}
-                      data-key={flag.key}
-                      data-enabled={String(!flag.enabled)}
-                      id={`flag-${flag.key}`}
-                    >
-                      {flag.enabled ? 'Desactivar' : 'Activar'}
-                    </button>
+                    {/* <form> nativo — funciona sin JS, sin problemas de hidratación */}
+                    <form method="POST" action="/admin/flags" style={{ display: 'inline' }}>
+                      <input type="hidden" name="key"     value={flag.key} />
+                      <input type="hidden" name="enabled" value={String(!flag.enabled)} />
+                      <button
+                        type="submit"
+                        className={`toggle-btn ${flag.enabled ? 'disable' : 'enable'}`}
+                      >
+                        {flag.enabled ? 'Desactivar' : 'Activar'}
+                      </button>
+                    </form>
                   </div>
                 </div>
               ))}
             </div>
-
-            {/* Script para manejar los toggles sin recargar */}
-            <script dangerouslySetInnerHTML={{ __html: `
-              document.querySelectorAll('[id^="flag-"]').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                  const key     = btn.getAttribute('data-key');
-                  const enabled = btn.getAttribute('data-enabled') === 'true';
-                  btn.disabled  = true;
-                  btn.textContent = '...';
-                  try {
-                    const res = await fetch('/admin/flags', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ key, enabled }),
-                    });
-                    if (res.ok) window.location.reload();
-                    else { alert('Error al actualizar el flag'); btn.disabled = false; }
-                  } catch(e) {
-                    alert('Error de red'); btn.disabled = false;
-                  }
-                });
-              });
-            `}} />
 
           </div>}
 

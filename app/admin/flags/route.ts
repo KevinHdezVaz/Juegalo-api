@@ -9,11 +9,32 @@ const supabase = createClient(
 /**
  * POST /admin/flags
  * Actualiza un feature flag desde el panel de admin.
- * Body: { key: string, enabled: boolean }
+ * Acepta tanto JSON ({ key, enabled }) como form-urlencoded (desde <form> HTML).
+ * Redirige de vuelta a /admin?tab=config tras el update.
  */
 export async function POST(req: NextRequest) {
   try {
-    const { key, enabled } = await req.json();
+    let key: string | undefined;
+    let enabledRaw: string | boolean | undefined;
+
+    const ct = req.headers.get('content-type') ?? '';
+
+    if (ct.includes('application/json')) {
+      // Llamada fetch() desde JS
+      const body = await req.json();
+      key        = body.key;
+      enabledRaw = body.enabled;
+    } else {
+      // Envío nativo de <form method="POST">
+      const form = await req.formData();
+      key        = form.get('key')?.toString();
+      enabledRaw = form.get('enabled')?.toString();
+    }
+
+    const enabled =
+      typeof enabledRaw === 'boolean'
+        ? enabledRaw
+        : enabledRaw === 'true';
 
     if (!key || typeof enabled !== 'boolean') {
       return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 });
@@ -27,9 +48,27 @@ export async function POST(req: NextRequest) {
     if (error) throw error;
 
     console.log(`[Flags] ✅ ${key} → ${enabled}`);
+
+    // Si viene de un <form>, redirigir de vuelta al panel
+    if (!ct.includes('application/json')) {
+      const msg = enabled ? 'activado' : 'desactivado';
+      return NextResponse.redirect(
+        new URL(`/admin?tab=config&success=Flag+${key}+${msg}`, req.url),
+        303, // See Other — el browser hace GET
+      );
+    }
+
     return NextResponse.json({ ok: true, key, enabled });
   } catch (e) {
     console.error('[Flags] Error:', e);
+
+    const ct = req.headers.get('content-type') ?? '';
+    if (!ct.includes('application/json')) {
+      return NextResponse.redirect(
+        new URL('/admin?tab=config&error=Error+al+actualizar', req.url),
+        303,
+      );
+    }
     return NextResponse.json({ error: 'Error interno' }, { status: 500 });
   }
 }
