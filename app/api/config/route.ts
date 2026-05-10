@@ -11,7 +11,11 @@ const supabase = createClient(
  * Devuelve configuración pública (no secreta) para la app Flutter.
  * Solo expone claves en la lista blanca — NUNCA el s2s_token.
  */
-const PUBLIC_KEYS = new Set(['adjoe_app_id']);
+const PUBLIC_KEYS = new Set([
+  'adjoe_app_id',
+  'force_update',   // "true" | "false"
+  'min_version',    // semver, ej. "1.2.0"
+]);
 
 export async function GET() {
   try {
@@ -24,16 +28,17 @@ export async function GET() {
 
     const config: Record<string, string> = {};
     for (const row of data ?? []) {
-      if (PUBLIC_KEYS.has(row.key) && row.value) {
-        config[row.key] = row.value;
+      if (PUBLIC_KEYS.has(row.key)) {
+        config[row.key] = row.value ?? '';
       }
     }
 
     return NextResponse.json(config, {
-      headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30' },
+      headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=10' },
     });
   } catch (e) {
     console.error('[Config] Error:', e);
-    return NextResponse.json({});
+    // Defaults seguros: sin force update
+    return NextResponse.json({ force_update: 'false', min_version: '1.0.0' });
   }
 }

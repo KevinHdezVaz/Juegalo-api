@@ -142,7 +142,7 @@ export default async function AdminPage({
   const [flags, adjoeConfig]: [any[], Record<string, string>] = activeTab === 'config'
     ? await Promise.all([
         supabase.from('feature_flags').select('key, enabled, label, description, updated_at').then(r => r.data ?? []),
-        supabase.from('app_config').select('key, value, updated_at').in('key', ['adjoe_app_id', 'adjoe_s2s_token']).then(r => {
+        supabase.from('app_config').select('key, value, updated_at').in('key', ['adjoe_app_id', 'adjoe_s2s_token', 'force_update', 'min_version']).then(r => {
           const map: Record<string, string> = {};
           for (const row of r.data ?? []) map[row.key] = row.value ?? '';
           return map;
@@ -219,6 +219,23 @@ export default async function AdminPage({
           .adjoe-status { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 10px; border-radius:20px; }
           .adjoe-status.set   { background:#F0FDF4; color:#166534; border:1px solid #BBF7D0; }
           .adjoe-status.unset { background:#FFF7ED; color:#92400E; border:1px solid #FED7AA; }
+          /* VERSION UPDATE */
+          .version-card { background:#fff; border:1px solid #E2E8F0; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.04); margin-top:28px; }
+          .version-header { padding:18px 24px 14px; border-bottom:1px solid #F1F5F9; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+          .version-header-left { display:flex; align-items:center; gap:10px; }
+          .version-icon { width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg,#6366F1,#4F46E5); display:flex; align-items:center; justify-content:center; font-size:18px; }
+          .version-title { font-size:14px; font-weight:700; color:#0F172A; }
+          .version-sub   { font-size:12px; color:#64748B; margin-top:1px; }
+          .version-body  { padding:20px 24px; display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+          .version-field { display:flex; flex-direction:column; gap:6px; }
+          .version-label { font-size:11px; font-weight:600; color:#64748B; text-transform:uppercase; letter-spacing:.4px; }
+          .version-toggle-row { display:flex; align-items:center; gap:10px; }
+          .version-toggle-btn { padding:9px 16px; border:none; border-radius:10px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; }
+          .version-toggle-btn.activate   { background:linear-gradient(135deg,#EF4444,#DC2626); color:#fff; box-shadow:0 2px 8px rgba(239,68,68,.35); }
+          .version-toggle-btn.deactivate { background:linear-gradient(135deg,#10B981,#059669); color:#fff; box-shadow:0 2px 8px rgba(16,185,129,.3); }
+          .version-badge.on  { background:#FEF2F2; color:#991B1B; border:1px solid #FECACA; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+          .version-badge.off { background:#F0FDF4; color:#166534; border:1px solid #BBF7D0; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+          .version-warning { margin:0 24px 20px; padding:12px 16px; background:#FFF7ED; border:1px solid #FED7AA; border-radius:12px; font-size:12px; color:#92400E; display:flex; align-items:center; gap:8px; }
 
           /* MAIN */
           .main { padding:24px 32px 56px; max-width:1280px; margin:0 auto; }
@@ -995,6 +1012,73 @@ export default async function AdminPage({
 
               </div>
             </div>
+
+            {/* ── Force Update ──────────────────────────────────────────── */}
+            {(() => {
+              const forceUpdateActive = adjoeConfig['force_update'] === 'true';
+              const currentMinVersion = adjoeConfig['min_version'] || '1.0.0';
+              return (
+                <div className="version-card">
+                  <div className="version-header">
+                    <div className="version-header-left">
+                      <div className="version-icon">🚀</div>
+                      <div>
+                        <div className="version-title">Actualización forzada</div>
+                        <div className="version-sub">Obliga a los usuarios a actualizar la app antes de continuar</div>
+                      </div>
+                    </div>
+                    <span className={`version-badge ${forceUpdateActive ? 'on' : 'off'}`}>
+                      {forceUpdateActive ? '⚠ Activa' : '✓ Inactiva'}
+                    </span>
+                  </div>
+
+                  {forceUpdateActive && (
+                    <div className="version-warning">
+                      ⚠️ <strong>Activa ahora</strong> — Los usuarios con versión anterior a <code>{currentMinVersion}</code> ven el dialog de actualización y no pueden usar la app.
+                    </div>
+                  )}
+
+                  <div className="version-body">
+                    {/* Toggle force_update */}
+                    <div className="version-field">
+                      <div className="version-label">Estado</div>
+                      <div className="version-toggle-row">
+                        <form method="POST" action="/admin/config">
+                          <input type="hidden" name="key" value="force_update" />
+                          <input type="hidden" name="value" value={String(!forceUpdateActive)} />
+                          <button
+                            type="submit"
+                            className={`version-toggle-btn ${forceUpdateActive ? 'deactivate' : 'activate'}`}
+                          >
+                            {forceUpdateActive ? '✓ Desactivar' : '⚠ Activar'}
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+
+                    {/* min_version */}
+                    <div className="version-field">
+                      <div className="version-label">Versión mínima requerida</div>
+                      <form method="POST" action="/admin/config">
+                        <input type="hidden" name="key" value="min_version" />
+                        <div className="adjoe-row">
+                          <input
+                            className="adjoe-input"
+                            type="text"
+                            name="value"
+                            defaultValue={currentMinVersion}
+                            placeholder="ej. 1.2.0"
+                            pattern="\d+\.\d+\.\d+"
+                            style={{ fontFamily: 'monospace' }}
+                          />
+                          <button type="submit" className="adjoe-save-btn">Guardar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
           </div>}
 
