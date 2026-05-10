@@ -1,20 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
 
 const SESSION_COOKIE = '__admin_session';
 
-/** Verifica que el cookie de sesión sea válido y no haya expirado. */
-function isValidSession(token: string | undefined): boolean {
+const enc = new TextEncoder();
+
+/** Convierte ArrayBuffer a hex string */
+function bufToHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Verifica la sesión usando Web Crypto API (disponible en Edge Runtime).
+ * Formato del token: "{expiry}.{username}|{hmac_sha256_hex}"
+ */
+async function isValidSession(token: string | undefined): Promise<boolean> {
   if (!token) return false;
   try {
-    const secret = process.env.ADMIN_SESSION_SECRET ?? process.env.ADMIN_PASSWORD ?? 'change_me';
-    // Formato: "{expiry}.{username}|{hmac_hex}"
+    const secret  = process.env.ADMIN_SESSION_SECRET ?? process.env.ADMIN_PASSWORD ?? 'change_me';
     const pipeIdx = token.lastIndexOf('|');
     if (pipeIdx === -1) return false;
+
     const payload = token.slice(0, pipeIdx);
     const sig     = token.slice(pipeIdx + 1);
-    const expected = createHmac('sha256', secret).update(payload).digest('hex');
+
+    // Importar clave HMAC-SHA256 via Web Crypto
+    const key = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+
+    const sigBuf   = await crypto.subtle.sign('HMAC', key, enc.encode(payload));
+    const expected = bufToHex(sigBuf);
+
     if (sig !== expected) return false;
+
     const expiry = parseInt(payload.split('.')[0], 10);
     return Date.now() < expiry;
   } catch {
@@ -22,21 +46,17 @@ function isValidSession(token: string | undefined): boolean {
   }
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Rutas excluidas de auth
-  if (
-    pathname === '/admin/login' ||
-    pathname.startsWith('/admin/auth')
-  ) {
+  if (pathname === '/admin/login' || pathname.startsWith('/admin/auth')) {
     return NextResponse.next();
   }
 
   const session = req.cookies.get(SESSION_COOKIE)?.value;
-  if (!isValidSession(session)) {
-    const loginUrl = new URL('/admin/login', req.url);
-    return NextResponse.redirect(loginUrl);
+  if (!(await isValidSession(session))) {
+    return NextResponse.redirect(new URL('/admin/login', req.url));
   }
 
   return NextResponse.next();
