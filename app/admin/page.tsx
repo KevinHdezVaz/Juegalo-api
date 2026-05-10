@@ -138,6 +138,11 @@ export default async function AdminPage({
     getStats(),
   ]);
 
+  // Feature flags — solo cuando está en el tab de config
+  const flags = activeTab === 'config'
+    ? await supabase.from('feature_flags').select('key, enabled, label, description, updated_at').then(r => r.data ?? [])
+    : [];
+
   // AdMob — solo cuando el usuario está en el tab de AdMob
   const [admob, paidPeriod, periods] = activeTab === 'admob'
     ? await Promise.all([
@@ -344,6 +349,28 @@ export default async function AdminPage({
           .admob-days-btn:hover { border-color:#6366F1; color:#4338CA; background:#EEF2FF; }
           .admob-days-btn.active { border-color:#6366F1; background:#6366F1; color:#fff; }
 
+          /* CONFIG / FEATURE FLAGS */
+          .flags-grid { display:flex; flex-direction:column; gap:10px; }
+          .flag-card { background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:18px 20px; display:flex; align-items:center; justify-content:space-between; gap:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); transition:border-color .2s; }
+          .flag-card.danger { border-color:#FCA5A5; background:#FFF1F2; }
+          .flag-info { flex:1; }
+          .flag-label { font-size:14px; font-weight:700; color:#0F172A; margin-bottom:3px; }
+          .flag-desc  { font-size:12px; color:#64748B; }
+          .flag-meta  { font-size:10px; color:#94A3B8; margin-top:4px; }
+          .flag-toggle { display:flex; align-items:center; gap:10px; }
+          .toggle-status { font-size:12px; font-weight:700; }
+          .toggle-status.on  { color:#059669; }
+          .toggle-status.off { color:#DC2626; }
+          .toggle-btn { padding:8px 18px; border-radius:8px; font-size:12px; font-weight:700; border:none; cursor:pointer; font-family:inherit; transition:all .15s; }
+          .toggle-btn.enable  { background:#D1FAE5; color:#065F46; }
+          .toggle-btn.disable { background:#FEE2E2; color:#991B1B; }
+          .toggle-btn:hover { filter:brightness(.93); transform:translateY(-1px); }
+          .maintenance-banner { background:linear-gradient(135deg,#FEF3C7,#FDE68A); border:2px solid #F59E0B; border-radius:16px; padding:20px 24px; margin-bottom:20px; display:flex; align-items:center; gap:16px; }
+          .maintenance-icon { font-size:32px; }
+          .maintenance-text { flex:1; }
+          .maintenance-title { font-size:15px; font-weight:800; color:#92400E; }
+          .maintenance-sub   { font-size:12px; color:#B45309; margin-top:3px; }
+
           /* PERÍODOS ADMOB */
           .period-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
           .period-card { background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.04); position:relative; overflow:hidden; }
@@ -464,6 +491,9 @@ export default async function AdminPage({
             </a>
             <a href="/admin?tab=admob" className={`tab-btn ${activeTab === 'admob' ? 'active' : ''}`}>
               📊 AdMob
+            </a>
+            <a href="/admin?tab=config" className={`tab-btn ${activeTab === 'config' ? 'active' : ''}`}>
+              ⚙️ Config
             </a>
           </div>
 
@@ -822,6 +852,84 @@ export default async function AdminPage({
                 )}
               </>
             )}
+          </div>}
+
+          {/* TAB: CONFIG */}
+          {activeTab === 'config' && <div>
+
+            {/* Banner de mantenimiento activo */}
+            {flags.find((f: any) => f.key === 'maintenance_mode')?.enabled && (
+              <div className="maintenance-banner">
+                <div className="maintenance-icon">🚧</div>
+                <div className="maintenance-text">
+                  <div className="maintenance-title">Modo mantenimiento ACTIVO</div>
+                  <div className="maintenance-sub">Los usuarios están viendo la pantalla de mantenimiento. Desactívalo cuando termines.</div>
+                </div>
+              </div>
+            )}
+
+            <div className="section-header">
+              <span className="section-title">⚙️ Feature Flags</span>
+              <span className="count-pill slate">{flags.length} flags</span>
+            </div>
+
+            <div className="flags-grid">
+              {flags.length === 0 ? (
+                <div className="empty">
+                  <div className="empty-icon">⚙️</div>
+                  <div className="empty-text">No hay flags configurados</div>
+                  <div className="empty-sub">Ejecuta el SQL de creación en Supabase primero</div>
+                </div>
+              ) : flags.map((flag: any) => (
+                <div key={flag.key} className={`flag-card ${flag.key === 'maintenance_mode' ? 'danger' : ''}`}>
+                  <div className="flag-info">
+                    <div className="flag-label">{flag.label}</div>
+                    <div className="flag-desc">{flag.description}</div>
+                    <div className="flag-meta">
+                      Clave: <code>{flag.key}</code> · Actualizado: {new Date(flag.updated_at).toLocaleString('es-MX')}
+                    </div>
+                  </div>
+                  <div className="flag-toggle">
+                    <span className={`toggle-status ${flag.enabled ? 'on' : 'off'}`}>
+                      {flag.enabled ? '● Activo' : '○ Inactivo'}
+                    </span>
+                    <button
+                      className={`toggle-btn ${flag.enabled ? 'disable' : 'enable'}`}
+                      onClick={undefined}
+                      data-key={flag.key}
+                      data-enabled={String(!flag.enabled)}
+                      id={`flag-${flag.key}`}
+                    >
+                      {flag.enabled ? 'Desactivar' : 'Activar'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Script para manejar los toggles sin recargar */}
+            <script dangerouslySetInnerHTML={{ __html: `
+              document.querySelectorAll('[id^="flag-"]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                  const key     = btn.getAttribute('data-key');
+                  const enabled = btn.getAttribute('data-enabled') === 'true';
+                  btn.disabled  = true;
+                  btn.textContent = '...';
+                  try {
+                    const res = await fetch('/admin/flags', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key, enabled }),
+                    });
+                    if (res.ok) window.location.reload();
+                    else { alert('Error al actualizar el flag'); btn.disabled = false; }
+                  } catch(e) {
+                    alert('Error de red'); btn.disabled = false;
+                  }
+                });
+              });
+            `}} />
+
           </div>}
 
           {/* TAB: NOTIFICACIONES */}
