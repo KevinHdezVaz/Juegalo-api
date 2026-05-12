@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const EMAILJS_SERVICE_ID  = 'service_m7kwjz8';
-const EMAILJS_TEMPLATE_ID = 'template_4neo6wl';
-const EMAILJS_PUBLIC_KEY  = '3pdmYJQXeK7_EhCFQ';
-const EMAILJS_PRIVATE_KEY = 'fl4tm65TN7uUM87g097e7';
+const EMAILJS_SERVICE_ID  = process.env.EMAILJS_SERVICE_ID!;
+const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID!;
+const EMAILJS_PUBLIC_KEY  = process.env.EMAILJS_PUBLIC_KEY!;
+const EMAILJS_PRIVATE_KEY = process.env.EMAILJS_PRIVATE_KEY!;
 
 /**
  * POST /api/notify/new-cashout
