@@ -104,35 +104,6 @@ export async function GET(req: NextRequest) {
     return new NextResponse('1', { status: 200 });
   }
 
-  // ── Anti-fraude: mínimo 25 segundos entre videos por usuario ─────────────
-  // Un anuncio rewarded real dura al menos 15-30 s. Si llegan más rápido
-  // es un bot/emulador — rechazamos silenciosamente (200 para que AdMob
-  // no reintente, pero NO acreditamos monedas).
-  const MIN_SECONDS_BETWEEN_VIDEOS = 25;
-
-  const { data: lastVideo } = await supabase
-    .from('transactions')
-    .select('created_at')
-    .eq('user_id', uid)
-    .eq('source', 'video')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (lastVideo) {
-    const secondsSinceLast =
-      (Date.now() - new Date(lastVideo.created_at).getTime()) / 1000;
-
-    if (secondsSinceLast < MIN_SECONDS_BETWEEN_VIDEOS) {
-      console.warn(
-        `[AdMob SSV] 🚫 Rate limit: uid=${uid} | ` +
-        `${secondsSinceLast.toFixed(1)}s desde el último video (mín ${MIN_SECONDS_BETWEEN_VIDEOS}s) | ` +
-        `txn: ${transactionId}`
-      );
-      return new NextResponse('1', { status: 200 }); // silencioso — AdMob no reintenta
-    }
-  }
-
   // ── Anti-fraude: cap diario de 50 videos (1 500 monedas) ──────────────────
   const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
   const { count: videosToday } = await supabase
