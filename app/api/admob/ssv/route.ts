@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createVerify }              from 'crypto';
-import { creditCoins }               from '../../../../lib/supabase';
+import { creditCoins, supabase }     from '../../../../lib/supabase';
 
 /**
  * GET /api/admob/ssv
@@ -104,9 +104,55 @@ export async function GET(req: NextRequest) {
     return new NextResponse('1', { status: 200 });
   }
 
+  // ── Anti-fraude: mínimo 25 segundos entre videos por usuario ─────────────
+  // Un anuncio rewarded real dura al menos 15-30 s. Si llegan más rápido
+  // es un bot/emulador — rechazamos silenciosamente (200 para que AdMob
+  // no reintente, pero NO acreditamos monedas).
+  const MIN_SECONDS_BETWEEN_VIDEOS = 25;
+
+  const { data: lastVideo } = await supabase
+    .from('transactions')
+    .select('created_at')
+    .eq('user_id', uid)
+    .eq('source', 'video')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastVideo) {
+    const secondsSinceLast =
+      (Date.now() - new Date(lastVideo.created_at).getTime()) / 1000;
+
+    if (secondsSinceLast < MIN_SECONDS_BETWEEN_VIDEOS) {
+      console.warn(
+        `[AdMob SSV] 🚫 Rate limit: uid=${uid} | ` +
+        `${secondsSinceLast.toFixed(1)}s desde el último video (mín ${MIN_SECONDS_BETWEEN_VIDEOS}s) | ` +
+        `txn: ${transactionId}`
+      );
+      return new NextResponse('1', { status: 200 }); // silencioso — AdMob no reintenta
+    }
+  }
+
+  // ── Anti-fraude: cap diario de 50 videos (1 500 monedas) ──────────────────
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+  const { count: videosToday } = await supabase
+    .from('transactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', uid)
+    .eq('source', 'video')
+    .gte('created_at', `${today}T00:00:00.000Z`);
+
+  if ((videosToday ?? 0) >= 50) {
+    console.warn(
+      `[AdMob SSV] 🚫 Cap diario alcanzado: uid=${uid} | ` +
+      `${videosToday} videos hoy | txn: ${transactionId}`
+    );
+    return new NextResponse('1', { status: 200 });
+  }
+
   // ── Acreditar monedas ──────────────────────────────────────────────────────
-  // Opción B: siempre 30 monedas fijas (ignoramos reward_amount de AdMob)
-  // Así aunque alguien manipule el parámetro reward_amount, siempre cobra 30
+  // Siempre 30 monedas fijas — ignoramos reward_amount de AdMob para evitar
+  // manipulación del parámetro.
   const coins = 30;
 
   try {
