@@ -98,8 +98,10 @@ export async function GET(req: NextRequest) {
   // ── Obtener UID del usuario ────────────────────────────────────────────────
   const uid = customData || userId;
   if (!uid) {
-    console.warn('[AdMob SSV] Sin user ID');
-    return new NextResponse('0', { status: 400 });
+    // Sin UID = petición de verificación de AdMob (test de conectividad)
+    // Devolvemos 200 para pasar la verificación sin acreditar monedas
+    console.log('[AdMob SSV] ✅ Verificación de conectividad OK (sin user ID)');
+    return new NextResponse('1', { status: 200 });
   }
 
   // ── Acreditar monedas ──────────────────────────────────────────────────────
