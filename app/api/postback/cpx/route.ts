@@ -67,13 +67,25 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Acreditar monedas ────────────────────────────────────────────
-  // amount_local ya refleja el margen configurado en CPX → Reward Settings
-  // (Currency Factor = 600 → usuario recibe 60% del valor de la encuesta)
-  const coins = Math.floor(parseFloat(amountStr));
-  if (isNaN(coins) || coins <= 0) {
+  // CPX manda amount_local con su propio Currency Factor.
+  // Aplicamos un divisor para normalizar a nuestra economía, y un cap máximo.
+  //
+  // Variables de entorno para ajustar sin redeploy:
+  //   CPX_COINS_DIVISOR  — divide amount_local (default: 1)
+  //   CPX_COINS_MAX      — cap máximo por encuesta (default: 2000)
+  //   CPX_COINS_MIN      — mínimo por encuesta aunque el divisor dé 0 (default: 50)
+  const divisor  = parseFloat(process.env.CPX_COINS_DIVISOR ?? '1');
+  const maxCoins = parseInt(process.env.CPX_COINS_MAX  ?? '2000', 10);
+  const minCoins = parseInt(process.env.CPX_COINS_MIN  ?? '50',   10);
+
+  const rawCoins = parseFloat(amountStr);
+  if (isNaN(rawCoins) || rawCoins <= 0) {
     console.warn('[CPX] Monto inválido:', amountStr);
     return new NextResponse('0', { status: 400 });
   }
+
+  const coins = Math.min(maxCoins, Math.max(minCoins, Math.floor(rawCoins / divisor)));
+  console.log(`[CPX] amount_local=${rawCoins} ÷ ${divisor} → ${coins} monedas (cap: ${maxCoins})`);
 
   try {
     await creditCoins(
