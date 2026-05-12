@@ -91,6 +91,19 @@ async function getPaidByPeriod(days: number): Promise<number> {
   }
 }
 
+async function getNotificationLogs(limit = 30) {
+  try {
+    const { data } = await supabase
+      .from('notification_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    return data ?? [];
+  } catch {
+    return [];
+  }
+}
+
 // Parsea "correo@paypal.com | MXN" → { account, currency }
 function parseDetail(raw: string | null | undefined): { account: string; currency: string | null } {
   if (!raw) return { account: '—', currency: null };
@@ -149,6 +162,11 @@ export default async function AdminPage({
         }),
       ])
     : [[], {} as Record<string, string>];
+
+  // Historial notificaciones — solo cuando está en ese tab
+  const notifLogs = activeTab === 'notificaciones'
+    ? await getNotificationLogs(30)
+    : [];
 
   // AdMob — solo cuando el usuario está en el tab de AdMob
   const [admob, paidPeriod, periods] = activeTab === 'admob'
@@ -370,6 +388,20 @@ export default async function AdminPage({
           .notify-result.ok  { display:block; background:#F0FDF4; color:#166534; border:1px solid #BBF7D0; }
           .notify-result.err { display:block; background:#FFF1F2; color:#991B1B; border:1px solid #FECDD3; }
           .notify-result.loading { display:block; background:#F8FAFC; color:#475569; border:1px solid #E2E8F0; }
+
+          /* Historial de notificaciones */
+          .notif-log-table { width:100%; border-collapse:collapse; font-size:13px; }
+          .notif-log-table th { text-align:left; padding:10px 12px; font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid #E2E8F0; }
+          .notif-log-table td { padding:12px; border-bottom:1px solid #F1F5F9; vertical-align:top; }
+          .notif-log-table tr:last-child td { border-bottom:none; }
+          .notif-log-table tr:hover td { background:#F8FAFC; }
+          .notif-log-title { font-weight:700; color:#0F172A; margin-bottom:2px; }
+          .notif-log-body  { color:#64748B; font-size:12px; line-height:1.4; }
+          .notif-log-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+          .notif-log-badge.all      { background:#EEF2FF; color:#4338CA; }
+          .notif-log-badge.bonus    { background:#FEF3C7; color:#92400E; }
+          .notif-log-sent  { font-weight:700; color:#059669; font-size:14px; }
+          .notif-log-date  { color:#94A3B8; font-size:11px; white-space:nowrap; }
 
           .divider { border:none; border-top:1.5px solid #F1F5F9; margin:20px 0; }
 
@@ -1172,6 +1204,58 @@ export default async function AdminPage({
                     <button type="submit" className="send-btn">📤 Enviar notificación</button>
                   </form>
                 </>
+              )}
+            </div>
+
+            {/* Historial de notificaciones */}
+            <div className="notify-card">
+              <div className="notify-card-title">📋 Historial de envíos</div>
+              <div className="notify-card-sub">Últimas 30 notificaciones enviadas desde el panel.</div>
+              {notifLogs.length === 0 ? (
+                <div style={{ textAlign:'center', padding:'32px 0', color:'#94A3B8', fontSize:13 }}>
+                  No hay notificaciones enviadas aún.
+                </div>
+              ) : (
+                <div style={{ overflowX:'auto' }}>
+                  <table className="notif-log-table">
+                    <thead>
+                      <tr>
+                        <th>Notificación</th>
+                        <th>Audiencia</th>
+                        <th>Enviados</th>
+                        <th>Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {notifLogs.map((log: any) => {
+                        const dt = new Date(log.created_at);
+                        const dateStr = dt.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' });
+                        const timeStr = dt.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' });
+                        const isBonus = log.audience === 'unclaimed_bonus';
+                        return (
+                          <tr key={log.id}>
+                            <td style={{ maxWidth: 340 }}>
+                              <div className="notif-log-title">{log.title}</div>
+                              <div className="notif-log-body">{log.body}</div>
+                            </td>
+                            <td>
+                              <span className={`notif-log-badge ${isBonus ? 'bonus' : 'all'}`}>
+                                {isBonus ? '🎁 Sin bono' : '👥 Todos'}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="notif-log-sent">{log.sent_count}</span>
+                              <span style={{ color:'#94A3B8', fontSize:11 }}> / {log.total_count}</span>
+                            </td>
+                            <td className="notif-log-date">
+                              {dateStr}<br />{timeStr}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
 
