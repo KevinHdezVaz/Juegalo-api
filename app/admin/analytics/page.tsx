@@ -28,45 +28,31 @@ function getSource(source: string) {
   return SOURCE_CONFIG[source] ?? { ...SOURCE_CONFIG.other, label: source };
 }
 
-// ── Queries ───────────────────────────────────────────────────────────────────
+// ── Queries via RPC (server-side aggregation — sin límite de 1 000 filas) ────
 
 async function getCoinsBySource(days: number) {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const { data } = await supabase
-    .from('transactions')
-    .select('source, coins')
-    .gte('created_at', since.toISOString())
-    .gt('coins', 0)
-    .limit(50000);
+  const { data, error } = await supabase.rpc('get_coins_by_source', { days_back: days });
+  if (error) console.error('[getCoinsBySource]', error.message);
   const map: Record<string, { coins: number; count: number }> = {};
   for (const row of data ?? []) {
-    const s = row.source ?? 'other';
-    if (!map[s]) map[s] = { coins: 0, count: 0 };
-    map[s].coins += Number(row.coins ?? 0);
-    map[s].count += 1;
+    map[row.source ?? 'other'] = {
+      coins: Number(row.total_coins ?? 0),
+      count: Number(row.tx_count ?? 0),
+    };
   }
   return map;
 }
 
 async function getDailyBySource(days: number) {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const { data } = await supabase
-    .from('transactions')
-    .select('source, coins, created_at')
-    .gte('created_at', since.toISOString())
-    .gt('coins', 0)
-    .order('created_at', { ascending: true })
-    .limit(50000);
+  const { data, error } = await supabase.rpc('get_daily_by_source', { days_back: days });
+  if (error) console.error('[getDailyBySource]', error.message);
 
-  // Agrupar por día y fuente
   const map: Record<string, Record<string, number>> = {};
   for (const row of data ?? []) {
-    const day = (row.created_at as string).slice(0, 10);
+    const day = String(row.day ?? '').slice(0, 10);
     const src = row.source ?? 'other';
     if (!map[day]) map[day] = {};
-    map[day][src] = (map[day][src] ?? 0) + Number(row.coins ?? 0);
+    map[day][src] = (map[day][src] ?? 0) + Number(row.total_coins ?? 0);
   }
   // Llenar días vacíos
   const result: { day: string; sources: Record<string, number>; total: number }[] = [];
@@ -81,41 +67,25 @@ async function getDailyBySource(days: number) {
   return result;
 }
 
-async function getTopEarners(days: number, limit = 10) {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  const { data } = await supabase
-    .from('transactions')
-    .select('user_id, coins, source')
-    .gte('created_at', since.toISOString())
-    .gt('coins', 0)
-    .limit(50000);
+async function getTopEarners(days: number, lim = 10) {
+  const { data, error } = await supabase.rpc('get_top_earners', { days_back: days, lim });
+  if (error) console.error('[getTopEarners]', error.message);
 
-  const map: Record<string, { total: number; sources: Record<string, number> }> = {};
-  for (const row of data ?? []) {
-    const uid = row.user_id;
-    if (!map[uid]) map[uid] = { total: 0, sources: {} };
-    map[uid].total += Number(row.coins ?? 0);
-    const src = row.source ?? 'other';
-    map[uid].sources[src] = (map[uid].sources[src] ?? 0) + Number(row.coins ?? 0);
-  }
-  const sorted = Object.entries(map)
-    .sort(([, a], [, b]) => b.total - a.total)
-    .slice(0, limit);
+  const rows = data ?? [];
+  const uids = rows.map((r: any) => r.user_id);
 
-  // Obtener info de usuarios
-  const uids = sorted.map(([uid]) => uid);
-  const { data: users } = await supabase
-    .from('users')
-    .select('id, username, email, coins')
-    .in('id', uids);
+  const { data: users } = uids.length
+    ? await supabase.from('users').select('id, username, email, coins').in('id', uids)
+    : { data: [] };
+
   const userMap: Record<string, any> = {};
   for (const u of users ?? []) userMap[u.id] = u;
 
-  return sorted.map(([uid, info]) => ({
-    uid,
-    user: userMap[uid] ?? { username: 'Desconocido', email: '—', coins: 0 },
-    ...info,
+  return rows.map((r: any) => ({
+    uid:   r.user_id,
+    user:  userMap[r.user_id] ?? { username: 'Desconocido', email: '—', coins: 0 },
+    total: Number(r.total_coins ?? 0),
+    count: Number(r.tx_count ?? 0),
   }));
 }
 
@@ -128,35 +98,32 @@ async function getRecentTransactions(limit = 50) {
   return data ?? [];
 }
 
-async function getHourlyActivity() {
-  const since = new Date();
-  since.setDate(since.getDate() - 7);
-  const { data } = await supabase
-    .from('transactions')
-    .select('created_at, coins')
-    .gte('created_at', since.toISOString())
-    .gt('coins', 0)
-    .limit(50000);
+async function getHourlyActivity(days = 7) {
+  const { data, error } = await supabase.rpc('get_hourly_activity', { days_back: days });
+  if (error) console.error('[getHourlyActivity]', error.message);
 
   const hours: number[] = new Array(24).fill(0);
   for (const row of data ?? []) {
-    const h = new Date(row.created_at).getHours();
-    hours[h] += Number(row.coins ?? 0);
+    const h = Number(row.hour ?? 0);
+    if (h >= 0 && h < 24) hours[h] += Number(row.tx_count ?? 0);
   }
   return hours;
 }
 
-async function getSummaryTotals() {
-  const [
-    { data: txData },
-    { count: totalUsers },
-  ] = await Promise.all([
-    supabase.from('transactions').select('coins').gt('coins', 0).limit(100000),
+async function getSummaryTotals(days: number) {
+  const [{ data: rpcData, error }, { count: totalUsers }] = await Promise.all([
+    supabase.rpc('get_summary_totals', { days_back: days }),
     supabase.from('users').select('id', { count: 'exact', head: true }),
   ]);
-  const totalTx    = txData?.length ?? 0;
-  const totalCoins = txData?.reduce((s, r) => s + Number(r.coins ?? 0), 0) ?? 0;
-  return { totalTx, totalUsers: totalUsers ?? 0, totalCoins };
+  if (error) console.error('[getSummaryTotals]', error.message);
+  const row = (rpcData as any[])?.[0] ?? {};
+  return {
+    totalTx:         Number(row.total_txs         ?? 0),
+    totalUsers:      totalUsers                    ?? 0,
+    totalCoins:      Number(row.total_coins        ?? 0),
+    activeUsers:     Number(row.active_users       ?? 0),
+    avgCoinsPerUser: Number(row.avg_coins_per_user ?? 0),
+  };
 }
 
 // ── SVG Helpers ───────────────────────────────────────────────────────────────
@@ -289,8 +256,8 @@ export default async function AnalyticsPage({
     getDailyBySource(Math.min(days, 30)),
     getTopEarners(days),
     getRecentTransactions(50),
-    getHourlyActivity(),
-    getSummaryTotals(),
+    getHourlyActivity(7),
+    getSummaryTotals(days),
   ]);
 
   const totalCoinsPeriod = Object.values(coinsBySource).reduce((s, v) => s + v.coins, 0);
@@ -472,9 +439,9 @@ export default async function AnalyticsPage({
             </div>
             <div className="sum-card violet">
               <div className="sum-icon violet">📝</div>
-              <div className="sum-value">{Object.values(coinsBySource).reduce((s, v) => s + v.count, 0).toLocaleString()}</div>
+              <div className="sum-value">{summary.totalTx.toLocaleString()}</div>
               <div className="sum-label">Transacciones</div>
-              <div className="sum-sub">créditos procesados</div>
+              <div className="sum-sub">créditos en los últimos {days} días</div>
             </div>
             <div className="sum-card amber">
               <div className="sum-icon amber">👥</div>
@@ -483,10 +450,10 @@ export default async function AnalyticsPage({
               <div className="sum-sub">total histórico</div>
             </div>
             <div className="sum-card green">
-              <div className="sum-icon green">🏆</div>
-              <div className="sum-value">{(summary.totalCoins / 1000000).toFixed(2)}M</div>
-              <div className="sum-label">Monedas totales</div>
-              <div className="sum-sub">acreditadas históricamente</div>
+              <div className="sum-icon green">👤</div>
+              <div className="sum-value">{summary.activeUsers.toLocaleString()}</div>
+              <div className="sum-label">Usuarios activos</div>
+              <div className="sum-sub">con monedas en los últimos {days} días</div>
             </div>
           </div>
 
@@ -593,8 +560,8 @@ export default async function AnalyticsPage({
                     <tr>
                       <th>#</th>
                       <th>Usuario</th>
-                      <th>Monedas</th>
-                      <th>Fuentes</th>
+                      <th>Monedas ganadas</th>
+                      <th>Transacciones</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -619,19 +586,8 @@ export default async function AnalyticsPage({
                             <div className="coins-sub">saldo actual: {(u.user?.coins ?? 0).toLocaleString()}</div>
                           </td>
                           <td>
-                            <div className="source-pills">
-                              {Object.entries(u.sources)
-                                .sort(([,a],[,b]) => b - a)
-                                .slice(0, 3)
-                                .map(([src, val]) => {
-                                  const cfg = getSource(src);
-                                  return (
-                                    <span key={src} className="source-pill" style={{ background: cfg.bg, color: cfg.color, borderColor: cfg.border }}>
-                                      {cfg.emoji} {(val/1000).toFixed(1)}K
-                                    </span>
-                                  );
-                                })}
-                            </div>
+                            <div style={{ fontSize:14, fontWeight:700, color:'#475569' }}>{u.count.toLocaleString()}</div>
+                            <div className="coins-sub">créditos</div>
                           </td>
                         </tr>
                       );
