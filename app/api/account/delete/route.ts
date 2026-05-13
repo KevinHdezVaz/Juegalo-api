@@ -18,13 +18,15 @@ export async function DELETE(req: NextRequest) {
   }
 
   // ── Verificar JWT y obtener user_id ──────────────────────────────
-  // Cliente con anon key solo para verificar el token
-  const anonClient = createClient(
+  // Usamos service_role para verificar el token — funciona tanto con
+  // usuarios normales como con cuentas anónimas (guest).
+  const adminClient = createClient(
     process.env.SUPABASE_URL!,
-    process.env.SUPABASE_ANON_KEY!
+    process.env.SUPABASE_SERVICE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  const { data: { user }, error: authError } = await anonClient.auth.getUser(jwt);
+  const { data: { user }, error: authError } = await adminClient.auth.getUser(jwt);
 
   if (authError || !user) {
     return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
@@ -32,11 +34,7 @@ export async function DELETE(req: NextRequest) {
 
   // ── Eliminar usuario usando service_role (admin) ─────────────────
   // La tabla users tiene ON DELETE CASCADE → se borra todo automáticamente
-  const adminClient = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
+  // adminClient ya fue creado arriba para verificar el token.
 
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
 
