@@ -220,6 +220,8 @@ export default async function AdminPage({
           .nav-right { margin-left:auto; display:flex; align-items:center; gap:12px; }
           .nav-dot { width:8px; height:8px; border-radius:50%; background:#10B981; box-shadow:0 0 6px #10B981; }
           .nav-status { font-size:12px; color:#64748B; font-weight:500; }
+          .analytics-btn { padding:6px 14px; border-radius:8px; background:#EEF2FF; border:1px solid #C7D2FE; color:#4338CA; font-size:12px; font-weight:700; text-decoration:none; display:flex; align-items:center; gap:5px; }
+          .analytics-btn:hover { background:#E0E7FF; }
           .refresh-btn { padding:6px 14px; border-radius:8px; background:#F8FAFC; border:1px solid #E2E8F0; color:#475569; font-size:12px; font-weight:600; text-decoration:none; }
           .logout-btn  { padding:6px 14px; border-radius:8px; background:#FFF1F2; border:1px solid #FECDD3; color:#BE123C; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
           /* ADJOE CONFIG */
@@ -497,6 +499,7 @@ export default async function AdminPage({
           <div className="nav-right">
             <div className="nav-dot" />
             <span className="nav-status">En línea</span>
+            <a className="analytics-btn" href="/admin/analytics">📊 Analíticas</a>
             <a className="refresh-btn" href="/admin">↻ Actualizar</a>
             <form method="POST" action="/admin/auth" style={{ display:'inline' }}>
               <input type="hidden" name="action" value="logout" />
