@@ -148,16 +148,15 @@ async function getHourlyActivity() {
 
 async function getSummaryTotals() {
   const [
-    { count: totalTx },
+    { data: txData },
     { count: totalUsers },
-    { data: totalCoinsData },
   ] = await Promise.all([
-    supabase.from('transactions').select('id', { count: 'exact', head: true }).gt('coins', 0),
+    supabase.from('transactions').select('coins').gt('coins', 0).limit(100000),
     supabase.from('users').select('id', { count: 'exact', head: true }),
-    supabase.from('transactions').select('coins').gt('coins', 0),
   ]);
-  const totalCoins = totalCoinsData?.reduce((s, r) => s + Number(r.coins ?? 0), 0) ?? 0;
-  return { totalTx: totalTx ?? 0, totalUsers: totalUsers ?? 0, totalCoins };
+  const totalTx    = txData?.length ?? 0;
+  const totalCoins = txData?.reduce((s, r) => s + Number(r.coins ?? 0), 0) ?? 0;
+  return { totalTx, totalUsers: totalUsers ?? 0, totalCoins };
 }
 
 // ── SVG Helpers ───────────────────────────────────────────────────────────────
