@@ -37,7 +37,8 @@ async function getCoinsBySource(days: number) {
     .from('transactions')
     .select('source, coins')
     .gte('created_at', since.toISOString())
-    .gt('coins', 0);
+    .gt('coins', 0)
+    .limit(50000);
   const map: Record<string, { coins: number; count: number }> = {};
   for (const row of data ?? []) {
     const s = row.source ?? 'other';
@@ -56,7 +57,8 @@ async function getDailyBySource(days: number) {
     .select('source, coins, created_at')
     .gte('created_at', since.toISOString())
     .gt('coins', 0)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .limit(50000);
 
   // Agrupar por día y fuente
   const map: Record<string, Record<string, number>> = {};
@@ -86,7 +88,8 @@ async function getTopEarners(days: number, limit = 10) {
     .from('transactions')
     .select('user_id, coins, source')
     .gte('created_at', since.toISOString())
-    .gt('coins', 0);
+    .gt('coins', 0)
+    .limit(50000);
 
   const map: Record<string, { total: number; sources: Record<string, number> }> = {};
   for (const row of data ?? []) {
@@ -132,7 +135,8 @@ async function getHourlyActivity() {
     .from('transactions')
     .select('created_at, coins')
     .gte('created_at', since.toISOString())
-    .gt('coins', 0);
+    .gt('coins', 0)
+    .limit(50000);
 
   const hours: number[] = new Array(24).fill(0);
   for (const row of data ?? []) {
