@@ -11,7 +11,8 @@ const supabase = createClient(
 // ── Colores por fuente ────────────────────────────────────────────────────────
 const SOURCE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; emoji: string }> = {
   video:       { label: 'Videos',        color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', emoji: '📹' },
-  survey:      { label: 'Encuestas',     color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', emoji: '📋' },
+  survey:         { label: 'Encuestas',     color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', emoji: '📋' },
+  cpx_research:   { label: 'Encuestas CPX', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', emoji: '📋' },
   daily_bonus: { label: 'Bono diario',   color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', emoji: '🎁' },
   daily_goal:  { label: 'Meta diaria',   color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', emoji: '🎯' },
   referral:      { label: 'Referidos',      color: '#EF4444', bg: '#FFF1F2', border: '#FECDD3', emoji: '👥' },
@@ -170,7 +171,8 @@ function DonutChart({ data, size = 180 }: {
   const paths: React.ReactNode[] = [];
 
   for (const d of data) {
-    const slice = (d.value / total) * 2 * Math.PI;
+    // Mínimo 4° para que siempre sea visible aunque el valor sea muy pequeño
+    const slice = Math.max((d.value / total) * 2 * Math.PI, (4 * Math.PI) / 180);
     const x1 = cx + r * Math.cos(angle);
     const y1 = cy + r * Math.sin(angle);
     const x2 = cx + r * Math.cos(angle + slice);
