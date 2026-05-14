@@ -10,18 +10,23 @@ const supabase = createClient(
 
 // ── Colores por fuente ────────────────────────────────────────────────────────
 const SOURCE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; emoji: string }> = {
-  video:       { label: 'Videos',        color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', emoji: '📹' },
-  survey:         { label: 'Encuestas',     color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', emoji: '📋' },
-  cpx_research:   { label: 'Encuestas CPX', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', emoji: '📋' },
-  daily_bonus: { label: 'Bono diario',   color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', emoji: '🎁' },
-  daily_goal:  { label: 'Meta diaria',   color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', emoji: '🎯' },
-  referral:      { label: 'Referidos',      color: '#EF4444', bg: '#FFF1F2', border: '#FECDD3', emoji: '👥' },
-  ranking_prize: { label: 'Premio ranking', color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', emoji: '🏆' },
-  game:          { label: 'Juegos',         color: '#0EA5E9', bg: '#F0F9FF', border: '#BAE6FD', emoji: '🎮' },
-  paypal:        { label: 'Retiro PayPal',  color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0', emoji: '💸' },
-  bonus:       { label: 'Bono',          color: '#EC4899', bg: '#FDF2F8', border: '#FBCFE8', emoji: '⭐' },
-  cashout:     { label: 'Retiro',        color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0', emoji: '💸' },
-  other:       { label: 'Otro',          color: '#94A3B8', bg: '#F8FAFC', border: '#E2E8F0', emoji: '🔹' },
+  video:            { label: 'Videos',           color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE', emoji: '📹' },
+  survey:           { label: 'Encuestas',         color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE', emoji: '📋' },
+  cpx_research:     { label: 'Encuestas CPX',     color: '#0EA5E9', bg: '#F0F9FF', border: '#BAE6FD', emoji: '📋' },
+  daily_bonus:      { label: 'Bono diario',       color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', emoji: '🎁' },
+  daily_goal:       { label: 'Meta diaria',       color: '#10B981', bg: '#ECFDF5', border: '#A7F3D0', emoji: '🎯' },
+  referral:         { label: 'Referidos',         color: '#EF4444', bg: '#FFF1F2', border: '#FECDD3', emoji: '👥' },
+  ranking_prize:    { label: 'Premio ranking',    color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A', emoji: '🏆' },
+  game:             { label: 'Juegos',            color: '#0EA5E9', bg: '#F0F9FF', border: '#BAE6FD', emoji: '🎮' },
+  paypal:           { label: 'Retiro PayPal',     color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0', emoji: '💸' },
+  bonus:            { label: 'Bono',              color: '#EC4899', bg: '#FDF2F8', border: '#FBCFE8', emoji: '⭐' },
+  cashout:          { label: 'Retiro',            color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0', emoji: '💸' },
+  cashout_rejected: { label: 'Retiro rechazado',  color: '#DC2626', bg: '#FFF1F2', border: '#FECACA', emoji: '❌' },
+  admin:            { label: 'Ajuste admin',      color: '#475569', bg: '#F1F5F9', border: '#CBD5E1', emoji: '🔧' },
+  manual:           { label: 'Ajuste manual',     color: '#475569', bg: '#F1F5F9', border: '#CBD5E1', emoji: '✏️' },
+  migration:        { label: 'Migración',         color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0', emoji: '🔄' },
+  adjoe:            { label: 'Adjoe Playtime',    color: '#16A34A', bg: '#F0FDF4', border: '#BBF7D0', emoji: '🕹️' },
+  other:            { label: 'Otro',              color: '#94A3B8', bg: '#F8FAFC', border: '#E2E8F0', emoji: '🔹' },
 };
 
 function getSource(source: string) {
@@ -124,6 +129,42 @@ async function getSummaryTotals(days: number) {
     activeUsers:     Number(row.active_users       ?? 0),
     avgCoinsPerUser: Number(row.avg_coins_per_user ?? 0),
   };
+}
+
+async function getPhoneVerificationStats() {
+  // Total usuarios con teléfono verificado
+  const { data: verified } = await supabase
+    .from('users')
+    .select('id, username, email, coins, created_at')
+    .not('id', 'is', null);
+
+  // Obtener phones de auth.users via service role
+  const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+
+  const verifiedPhones = (authUsers?.users ?? []).filter(
+    u => u.phone && u.phone_confirmed_at
+  );
+
+  const totalUsers = authUsers?.users?.length ?? 0;
+  const totalVerified = verifiedPhones.length;
+
+  // Enriquecer con datos de public.users
+  const publicUserMap: Record<string, any> = {};
+  for (const u of verified ?? []) publicUserMap[u.id] = u;
+
+  const enriched = verifiedPhones
+    .sort((a, b) => new Date(b.phone_confirmed_at!).getTime() - new Date(a.phone_confirmed_at!).getTime())
+    .slice(0, 20)
+    .map(u => ({
+      id:          u.id,
+      phone:       u.phone ?? '—',
+      confirmedAt: u.phone_confirmed_at ?? '',
+      username:    publicUserMap[u.id]?.username ?? 'Jugador',
+      email:       u.email ?? '—',
+      coins:       publicUserMap[u.id]?.coins ?? 0,
+    }));
+
+  return { totalVerified, totalUsers, enriched };
 }
 
 // ── SVG Helpers ───────────────────────────────────────────────────────────────
@@ -251,6 +292,7 @@ export default async function AnalyticsPage({
     recentTx,
     hourly,
     summary,
+    phoneStats,
   ] = await Promise.all([
     getCoinsBySource(days),
     getDailyBySource(Math.min(days, 30)),
@@ -258,6 +300,7 @@ export default async function AnalyticsPage({
     getRecentTransactions(50),
     getHourlyActivity(7),
     getSummaryTotals(days),
+    getPhoneVerificationStats(),
   ]);
 
   const totalCoinsPeriod = Object.values(coinsBySource).reduce((s, v) => s + v.coins, 0);
@@ -382,6 +425,21 @@ export default async function AnalyticsPage({
 
           /* HOURLY */
           .hourly-wrap { padding-top:4px; }
+
+          /* PHONE VERIFICATION */
+          .phone-summary { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px; }
+          .phone-stat-card { border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:14px; }
+          .phone-stat-icon { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+          .phone-stat-value { font-size:26px; font-weight:900; letter-spacing:-1px; color:#0F172A; line-height:1; }
+          .phone-stat-label { font-size:12px; color:#64748B; margin-top:3px; font-weight:500; }
+          .phone-table { width:100%; border-collapse:collapse; }
+          .phone-table th { text-align:left; padding:9px 12px; font-size:11px; font-weight:700; color:#64748B; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid #F1F5F9; }
+          .phone-table td { padding:11px 12px; border-bottom:1px solid #F8FAFC; font-size:12.5px; vertical-align:middle; }
+          .phone-table tr:last-child td { border-bottom:none; }
+          .phone-table tr:hover td { background:#F0FDF4; }
+          .phone-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700; background:#DCFCE7; color:#16A34A; border:1px solid #BBF7D0; }
+          .progress-bar-wrap { height:8px; border-radius:4px; background:#F1F5F9; overflow:hidden; margin-top:6px; }
+          .progress-bar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,#10B981,#34D399); }
 
           /* EMPTY */
           .empty { padding:40px; text-align:center; color:#94A3B8; font-size:13px; }
@@ -687,6 +745,98 @@ export default async function AnalyticsPage({
                           <td className="date-cell">
                             {dt.toLocaleDateString('es-MX', { day:'2-digit', month:'short' })}<br />
                             {dt.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' })}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* PHONE VERIFICATION */}
+          <div className="section">
+            <div className="section-head">
+              <div>
+                <div className="section-title">📱 Verificación de teléfono vía SMS</div>
+                <div className="section-sub">Usuarios que registraron y verificaron su número de teléfono</div>
+              </div>
+              <span className="phone-badge">✓ Usuarios reales</span>
+            </div>
+
+            {/* Summary cards */}
+            <div className="phone-summary">
+              <div className="phone-stat-card" style={{ background:'#F0FDF4', border:'1px solid #BBF7D0' }}>
+                <div className="phone-stat-icon" style={{ background:'#DCFCE7' }}>📲</div>
+                <div>
+                  <div className="phone-stat-value">{phoneStats.totalVerified.toLocaleString()}</div>
+                  <div className="phone-stat-label">Teléfonos verificados</div>
+                  <div className="progress-bar-wrap" style={{ width:160 }}>
+                    <div className="progress-bar-fill" style={{ width: phoneStats.totalUsers > 0 ? `${Math.round(phoneStats.totalVerified / phoneStats.totalUsers * 100)}%` : '0%' }} />
+                  </div>
+                </div>
+              </div>
+              <div className="phone-stat-card" style={{ background:'#F8FAFC', border:'1px solid #E2E8F0' }}>
+                <div className="phone-stat-icon" style={{ background:'#EEF2FF' }}>👥</div>
+                <div>
+                  <div className="phone-stat-value">
+                    {phoneStats.totalUsers > 0
+                      ? `${Math.round(phoneStats.totalVerified / phoneStats.totalUsers * 100)}%`
+                      : '0%'}
+                  </div>
+                  <div className="phone-stat-label">
+                    De {phoneStats.totalUsers.toLocaleString()} usuarios totales han verificado su número
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Table of recently verified */}
+            {phoneStats.enriched.length === 0 ? (
+              <div className="empty">Ningún usuario ha verificado su teléfono aún</div>
+            ) : (
+              <div style={{ overflowX:'auto' }}>
+                <table className="phone-table">
+                  <thead>
+                    <tr>
+                      <th>Usuario</th>
+                      <th>Teléfono</th>
+                      <th>Email</th>
+                      <th>Monedas</th>
+                      <th>Verificado el</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {phoneStats.enriched.map((u: any) => {
+                      const initials = (u.username ?? 'U').substring(0, 2).toUpperCase();
+                      const dt = u.confirmedAt ? new Date(u.confirmedAt) : null;
+                      return (
+                        <tr key={u.id}>
+                          <td>
+                            <div className="user-cell">
+                              <div className="user-avatar" style={{ width:32, height:32, fontSize:11, background:'linear-gradient(135deg,#10B981,#059669)' }}>{initials}</div>
+                              <div>
+                                <div style={{ fontSize:13, fontWeight:700, color:'#0F172A' }}>{u.username}</div>
+                                <div style={{ fontSize:10, color:'#94A3B8' }}>{u.id.substring(0,8).toUpperCase()}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="phone-badge">📱 {u.phone}</span>
+                          </td>
+                          <td style={{ color:'#64748B', fontSize:12 }}>{u.email}</td>
+                          <td>
+                            <span style={{ fontWeight:800, color:'#7C3AED', fontSize:14 }}>{(u.coins ?? 0).toLocaleString()}</span>
+                            <div style={{ fontSize:10, color:'#94A3B8' }}>monedas</div>
+                          </td>
+                          <td className="date-cell">
+                            {dt ? (
+                              <>
+                                {dt.toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'numeric' })}<br />
+                                {dt.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit' })}
+                              </>
+                            ) : '—'}
                           </td>
                         </tr>
                       );
