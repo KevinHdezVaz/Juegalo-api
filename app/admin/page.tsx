@@ -627,11 +627,7 @@ export default async function AdminPage({
                               {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
                                 <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                                   <span className="account-text">{account}</span>
-                                  <button
-                                    title="Copiar correo"
-                                    onClick={`navigator.clipboard.writeText('${account}');this.innerHTML='✓';this.style.color='#10B981';setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)` as any}
-                                    style={{ background:'#F1F5F9', border:'1px solid #E2E8F0', cursor:'pointer', fontSize:16, color:'#64748B', padding:'4px 7px', borderRadius:6, lineHeight:1, flexShrink:0 }}
-                                  >📋</button>
+                                  <span dangerouslySetInnerHTML={{ __html: `<button onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');this.innerHTML='✓';this.style.color='#10B981';setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)" title="Copiar correo" style="background:#F1F5F9;border:1px solid #E2E8F0;cursor:pointer;font-size:16px;color:#64748B;padding:4px 7px;border-radius:6px;line-height:1;flex-shrink:0">📋</button>` }} />
                                 </div>
                                 {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
                               </>); })()}
@@ -709,11 +705,7 @@ export default async function AdminPage({
                             {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
                               <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                                 <span className="account-text">{account}</span>
-                                <button
-                                  title="Copiar correo"
-                                  onClick={`navigator.clipboard.writeText('${account}');this.innerHTML='✓';this.style.color='#10B981';setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)` as any}
-                                  style={{ background:'#F1F5F9', border:'1px solid #E2E8F0', cursor:'pointer', fontSize:16, color:'#64748B', padding:'4px 7px', borderRadius:6, lineHeight:1, flexShrink:0 }}
-                                >📋</button>
+                                <span dangerouslySetInnerHTML={{ __html: `<button onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');this.innerHTML='✓';this.style.color='#10B981';setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)" title="Copiar correo" style="background:#F1F5F9;border:1px solid #E2E8F0;cursor:pointer;font-size:16px;color:#64748B;padding:4px 7px;border-radius:6px;line-height:1;flex-shrink:0">📋</button>` }} />
                               </div>
                               {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
                             </>); })()}
