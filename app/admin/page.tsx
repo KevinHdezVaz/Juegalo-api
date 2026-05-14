@@ -38,13 +38,17 @@ const supabase = createClient(
 const MIN_CASHOUT_COINS = 10_000;
 const NEAR_CASHOUT_PCT  = 0.70;
 
-async function getCashoutRequests() {
-  const { data } = await supabase
+const PAGE_SIZE = 25;
+
+async function getCashoutRequests(page = 1) {
+  const from = (page - 1) * PAGE_SIZE;
+  const to   = from + PAGE_SIZE - 1;
+  const { data, count } = await supabase
     .from('cashout_requests')
-    .select(`*, users(username, email, coins)`)
+    .select(`*, users(username, email, coins)`, { count: 'exact' })
     .order('created_at', { ascending: false })
-    .limit(200);
-  return data ?? [];
+    .range(from, to);
+  return { data: data ?? [], total: count ?? 0 };
 }
 
 async function getStats() {
@@ -139,15 +143,16 @@ export const revalidate = 0;
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string; days?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string; days?: string; page?: string }>;
 }) {
   const sp = await searchParams;
   const activeTab  = sp.tab ?? 'retiros';
   const admobDays  = Number(sp.days ?? 7);
+  const currentPage = Math.max(1, Number(sp.page ?? 1));
 
   // Retiros y estadísticas — siempre, sin AdMob de por medio
-  const [requests, stats] = await Promise.all([
-    getCashoutRequests(),
+  const [{ data: requests, total: totalRequests }, stats] = await Promise.all([
+    getCashoutRequests(currentPage),
     getStats(),
   ]);
 
@@ -186,6 +191,7 @@ export default async function AdminPage({
   const sentCount   = sp.sent   ? Number(sp.sent)   : null;
   const totalCount  = sp.total  ? Number(sp.total)  : null;
   const pending     = requests.filter((r: any) => r.status === 'pending' || r.status === 'processing');
+  const totalPages  = Math.ceil(totalRequests / PAGE_SIZE);
 
   // Rentabilidad AdMob (valores con guardia por si algo falla en runtime)
   const safeEarnings  = Number.isFinite(admob?.totalEarnings) ? admob.totalEarnings : 0;
@@ -619,13 +625,13 @@ export default async function AdminPage({
                             </td>
                             <td>
                               {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
-                                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                                   <span className="account-text">{account}</span>
                                   <button
-                                    title="Copiar"
-                                    onClick={`navigator.clipboard.writeText('${account}');this.textContent='✓';setTimeout(()=>this.textContent='⎘',1500)` as any}
-                                    style={{ background:'none', border:'none', cursor:'pointer', fontSize:14, color:'#94A3B8', padding:'2px 4px', borderRadius:4, lineHeight:1 }}
-                                  >⎘</button>
+                                    title="Copiar correo"
+                                    onClick={`navigator.clipboard.writeText('${account}');this.innerHTML='✓';this.style.color='#10B981';setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)` as any}
+                                    style={{ background:'#F1F5F9', border:'1px solid #E2E8F0', cursor:'pointer', fontSize:16, color:'#64748B', padding:'4px 7px', borderRadius:6, lineHeight:1, flexShrink:0 }}
+                                  >📋</button>
                                 </div>
                                 {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
                               </>); })()}
@@ -657,7 +663,7 @@ export default async function AdminPage({
 
             <div className="section-header" style={{ marginTop: pending.length > 0 ? 8 : 0 }}>
               <span className="section-title">Historial completo</span>
-              <span className="count-pill slate">{requests.length} total</span>
+              <span className="count-pill slate">{totalRequests} total</span>
             </div>
             <div className="table-wrap">
               {requests.length === 0 ? (
@@ -701,13 +707,13 @@ export default async function AdminPage({
                           </td>
                           <td style={{ maxWidth: 260 }}>
                             {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
-                              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                                 <span className="account-text">{account}</span>
                                 <button
-                                  title="Copiar"
-                                  onClick={`navigator.clipboard.writeText('${account}');this.textContent='✓';setTimeout(()=>this.textContent='⎘',1500)` as any}
-                                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:14, color:'#94A3B8', padding:'2px 4px', borderRadius:4, lineHeight:1 }}
-                                >⎘</button>
+                                  title="Copiar correo"
+                                  onClick={`navigator.clipboard.writeText('${account}');this.innerHTML='✓';this.style.color='#10B981';setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)` as any}
+                                  style={{ background:'#F1F5F9', border:'1px solid #E2E8F0', cursor:'pointer', fontSize:16, color:'#64748B', padding:'4px 7px', borderRadius:6, lineHeight:1, flexShrink:0 }}
+                                >📋</button>
                               </div>
                               {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
                             </>); })()}
@@ -747,6 +753,43 @@ export default async function AdminPage({
                 </table>
               )}
             </div>
+
+            {/* Paginador */}
+            {totalPages > 1 && (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginTop:20, paddingBottom:8 }}>
+                {currentPage > 1 && (
+                  <a href={`?tab=retiros&page=${currentPage - 1}`}
+                    style={{ padding:'7px 16px', borderRadius:8, border:'1px solid #E2E8F0', background:'#fff', color:'#374151', fontWeight:600, fontSize:13, textDecoration:'none' }}>
+                    ← Anterior
+                  </a>
+                )}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+                  .reduce<(number|'...')[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx-1] as number) > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, i) => p === '...'
+                    ? <span key={`ellipsis-${i}`} style={{ padding:'7px 4px', color:'#94A3B8' }}>…</span>
+                    : <a key={p} href={`?tab=retiros&page=${p}`}
+                        style={{ padding:'7px 13px', borderRadius:8, border:`1px solid ${p === currentPage ? '#3B82F6' : '#E2E8F0'}`, background: p === currentPage ? '#3B82F6' : '#fff', color: p === currentPage ? '#fff' : '#374151', fontWeight:600, fontSize:13, textDecoration:'none' }}>
+                        {p}
+                      </a>
+                  )
+                }
+                {currentPage < totalPages && (
+                  <a href={`?tab=retiros&page=${currentPage + 1}`}
+                    style={{ padding:'7px 16px', borderRadius:8, border:'1px solid #E2E8F0', background:'#fff', color:'#374151', fontWeight:600, fontSize:13, textDecoration:'none' }}>
+                    Siguiente →
+                  </a>
+                )}
+                <span style={{ fontSize:12, color:'#94A3B8', marginLeft:8 }}>
+                  Página {currentPage} de {totalPages} · {totalRequests} registros
+                </span>
+              </div>
+            )}
+
           </div>}
 
           {/* TAB: ADMOB */}
