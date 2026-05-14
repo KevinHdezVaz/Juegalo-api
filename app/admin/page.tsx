@@ -619,7 +619,14 @@ export default async function AdminPage({
                             </td>
                             <td>
                               {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
-                                <span className="account-text">{account}</span>
+                                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                                  <span className="account-text">{account}</span>
+                                  <button
+                                    title="Copiar"
+                                    onClick={`navigator.clipboard.writeText('${account}');this.textContent='✓';setTimeout(()=>this.textContent='⎘',1500)` as any}
+                                    style={{ background:'none', border:'none', cursor:'pointer', fontSize:14, color:'#94A3B8', padding:'2px 4px', borderRadius:4, lineHeight:1 }}
+                                  >⎘</button>
+                                </div>
                                 {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
                               </>); })()}
                             </td>
@@ -694,7 +701,14 @@ export default async function AdminPage({
                           </td>
                           <td style={{ maxWidth: 260 }}>
                             {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
-                              <span className="account-text">{account}</span>
+                              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                                <span className="account-text">{account}</span>
+                                <button
+                                  title="Copiar"
+                                  onClick={`navigator.clipboard.writeText('${account}');this.textContent='✓';setTimeout(()=>this.textContent='⎘',1500)` as any}
+                                  style={{ background:'none', border:'none', cursor:'pointer', fontSize:14, color:'#94A3B8', padding:'2px 4px', borderRadius:4, lineHeight:1 }}
+                                >⎘</button>
+                              </div>
                               {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
                             </>); })()}
                             {r.notes && <div className={`notes-text${isError ? ' error' : ''}`}>{r.notes}</div>}
