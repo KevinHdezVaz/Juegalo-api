@@ -132,46 +132,39 @@ async function getSummaryTotals(days: number) {
 }
 
 async function getPhoneVerificationStats() {
-  // Total usuarios con teléfono verificado
-  const { data: verified } = await supabase
+  // Consultar auth.users directamente via SQL con service role
+  // Más confiable que admin.listUsers que puede tener campos incompletos
+  const { data: phoneRows, error: phoneErr } = await supabase.rpc('get_phone_verified_users');
+  if (phoneErr) console.error('[getPhoneVerificationStats] RPC error:', phoneErr.message);
+
+  // Total de usuarios registrados
+  const { count: totalUsers } = await supabase
     .from('users')
-    .select('id, username, email, coins, created_at')
-    .not('id', 'is', null);
-
-  // Obtener phones de auth.users via service role
-  // Nota: cuando el teléfono se agrega a una cuenta existente via updateUser + verifyOTP(phoneChange),
-  // Supabase guarda el número en `phone` pero phone_confirmed_at puede quedar null.
-  // Filtramos solo por phone no vacío — Supabase solo lo guarda tras OTP exitoso.
-  const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-
-  const allUsers = authUsers?.users ?? [];
-  const usersWithPhone = allUsers.filter(u => u.phone && u.phone.trim() !== '');
-
-  const totalUsers = allUsers.length;
-  const totalVerified = usersWithPhone.length;
+    .select('id', { count: 'exact', head: true });
 
   // Enriquecer con datos de public.users
-  const publicUserMap: Record<string, any> = {};
-  for (const u of verified ?? []) publicUserMap[u.id] = u;
+  const { data: publicUsers } = await supabase
+    .from('users')
+    .select('id, username, email, coins');
 
-  const enriched = usersWithPhone
-    .sort((a, b) => {
-      // Ordenar por phone_confirmed_at si existe, si no por updated_at o created_at
-      const dateA = a.phone_confirmed_at ?? a.updated_at ?? a.created_at ?? '';
-      const dateB = b.phone_confirmed_at ?? b.updated_at ?? b.created_at ?? '';
-      return new Date(dateB).getTime() - new Date(dateA).getTime();
-    })
+  const publicUserMap: Record<string, any> = {};
+  for (const u of publicUsers ?? []) publicUserMap[u.id] = u;
+
+  const rows = phoneRows ?? [];
+  const totalVerified = rows.length;
+
+  const enriched = rows
     .slice(0, 20)
-    .map(u => ({
+    .map((u: any) => ({
       id:          u.id,
       phone:       u.phone ?? '—',
-      confirmedAt: u.phone_confirmed_at ?? u.updated_at ?? u.created_at ?? '',
+      confirmedAt: u.phone_confirmed_at ?? u.updated_at ?? '',
       username:    publicUserMap[u.id]?.username ?? 'Jugador',
       email:       u.email ?? '—',
       coins:       publicUserMap[u.id]?.coins ?? 0,
     }));
 
-  return { totalVerified, totalUsers, enriched };
+  return { totalVerified, totalUsers: totalUsers ?? 0, enriched };
 }
 
 // ── SVG Helpers ───────────────────────────────────────────────────────────────
