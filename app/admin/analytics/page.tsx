@@ -139,26 +139,33 @@ async function getPhoneVerificationStats() {
     .not('id', 'is', null);
 
   // Obtener phones de auth.users via service role
+  // Nota: cuando el teléfono se agrega a una cuenta existente via updateUser + verifyOTP(phoneChange),
+  // Supabase guarda el número en `phone` pero phone_confirmed_at puede quedar null.
+  // Filtramos solo por phone no vacío — Supabase solo lo guarda tras OTP exitoso.
   const { data: authUsers } = await supabase.auth.admin.listUsers({ perPage: 1000 });
 
-  const verifiedPhones = (authUsers?.users ?? []).filter(
-    u => u.phone && u.phone_confirmed_at
-  );
+  const allUsers = authUsers?.users ?? [];
+  const usersWithPhone = allUsers.filter(u => u.phone && u.phone.trim() !== '');
 
-  const totalUsers = authUsers?.users?.length ?? 0;
-  const totalVerified = verifiedPhones.length;
+  const totalUsers = allUsers.length;
+  const totalVerified = usersWithPhone.length;
 
   // Enriquecer con datos de public.users
   const publicUserMap: Record<string, any> = {};
   for (const u of verified ?? []) publicUserMap[u.id] = u;
 
-  const enriched = verifiedPhones
-    .sort((a, b) => new Date(b.phone_confirmed_at!).getTime() - new Date(a.phone_confirmed_at!).getTime())
+  const enriched = usersWithPhone
+    .sort((a, b) => {
+      // Ordenar por phone_confirmed_at si existe, si no por updated_at o created_at
+      const dateA = a.phone_confirmed_at ?? a.updated_at ?? a.created_at ?? '';
+      const dateB = b.phone_confirmed_at ?? b.updated_at ?? b.created_at ?? '';
+      return new Date(dateB).getTime() - new Date(dateA).getTime();
+    })
     .slice(0, 20)
     .map(u => ({
       id:          u.id,
       phone:       u.phone ?? '—',
-      confirmedAt: u.phone_confirmed_at ?? '',
+      confirmedAt: u.phone_confirmed_at ?? u.updated_at ?? u.created_at ?? '',
       username:    publicUserMap[u.id]?.username ?? 'Jugador',
       email:       u.email ?? '—',
       coins:       publicUserMap[u.id]?.coins ?? 0,
