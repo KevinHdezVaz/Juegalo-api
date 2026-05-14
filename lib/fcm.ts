@@ -51,6 +51,7 @@ async function getAccessToken(): Promise<string> {
 // Envía una notificación a un token FCM específico
 export async function sendToToken(token: string, msg: FcmMessage): Promise<boolean> {
   const projectId   = process.env.FIREBASE_PROJECT_ID!;
+  console.log(`[FCM] 📤 Enviando notificación | title="${msg.title}" | projectId=${projectId} | token=...${token.slice(-10)}`);
   const accessToken = await getAccessToken();
 
   const res = await fetch(
@@ -81,15 +82,17 @@ export async function sendToToken(token: string, msg: FcmMessage): Promise<boole
   if (!res.ok) {
     const err = await res.json();
     const status = err?.error?.status ?? '';
+    console.error(`[FCM] ❌ Error HTTP ${res.status} | status=${status} | token=...${token.slice(-10)} | error=${JSON.stringify(err?.error)}`);
     // Token muerto — borrarlo de la BD para no volver a intentarlo
     if (status === 'NOT_FOUND' || status === 'UNREGISTERED') {
       await supabase.from('users').update({ fcm_token: null }).eq('fcm_token', token);
       console.log('[FCM] Token inválido eliminado de la BD.');
-    } else {
-      console.error('[FCM] Error enviando a token:', err);
     }
     return false;
   }
+
+  const responseData = await res.json();
+  console.log(`[FCM] ✅ Notificación enviada | messageId=${responseData?.name} | token=...${token.slice(-10)}`);
   return true;
 }
 
