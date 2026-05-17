@@ -136,6 +136,18 @@ export async function GET(req: NextRequest) {
     );
 
     console.log(`[AdMob SSV] ✅ ${coins} monedas → ${uid} | txn: ${transactionId}`);
+
+    // Marcar el intento pendiente más antiguo de este usuario como verificado
+    try {
+      await supabase.rpc('verify_oldest_video_attempt', {
+        p_user_id:        uid,
+        p_transaction_id: transactionId,
+      });
+    } catch (verifyErr) {
+      // No crítico — solo log, no interrumpir la respuesta a AdMob
+      console.warn('[AdMob SSV] No se pudo verificar intento pendiente:', verifyErr);
+    }
+
     // AdMob espera "1" o HTTP 200 para confirmar recepción
     return new NextResponse('1', { status: 200 });
 
