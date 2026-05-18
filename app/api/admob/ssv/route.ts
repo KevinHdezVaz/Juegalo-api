@@ -104,7 +104,30 @@ export async function GET(req: NextRequest) {
     return new NextResponse('1', { status: 200 });
   }
 
-  // ── Anti-fraude: cap diario de 50 videos (1 500 monedas) ──────────────────
+  // ── Anti-fraude 1: intervalo mínimo de 55 s entre videos ─────────────────
+  // El cooldown legítimo en la app es 60 s. Si el último video acreditado
+  // fue hace menos de 55 s, es un APK modificado o emulador automatizado.
+  const { data: lastVideo } = await supabase
+    .from('transactions')
+    .select('created_at')
+    .eq('user_id', uid)
+    .eq('source', 'video')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (lastVideo) {
+    const secondsSince = (Date.now() - new Date(lastVideo.created_at).getTime()) / 1000;
+    if (secondsSince < 55) {
+      console.warn(
+        `[AdMob SSV] 🚫 Intervalo demasiado corto: ${secondsSince.toFixed(1)}s | ` +
+        `uid=${uid} | txn: ${transactionId}`
+      );
+      return new NextResponse('1', { status: 200 }); // 200 → AdMob no reintenta
+    }
+  }
+
+  // ── Anti-fraude 2: cap diario de 50 videos (1 500 monedas) ───────────────
   const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
   const { count: videosToday } = await supabase
     .from('transactions')
