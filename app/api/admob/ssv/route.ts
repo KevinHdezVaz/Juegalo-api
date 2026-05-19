@@ -104,9 +104,9 @@ export async function GET(req: NextRequest) {
     return new NextResponse('1', { status: 200 });
   }
 
-  // ── Anti-fraude 1: intervalo mínimo de 55 s entre videos ─────────────────
-  // El cooldown legítimo en la app es 60 s. Si el último video acreditado
-  // fue hace menos de 55 s, es un APK modificado o emulador automatizado.
+  // ── Anti-fraude 1: intervalo mínimo de 10 s entre videos ─────────────────
+  // Con cooldown por slot de 15 s, el mínimo legítimo entre dos videos es ~15 s.
+  // Bloqueamos < 10 s para atrapar bots que van en 2-5 s sin afectar usuarios reales.
   const { data: lastVideo } = await supabase
     .from('transactions')
     .select('created_at')
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
 
   if (lastVideo) {
     const secondsSince = (Date.now() - new Date(lastVideo.created_at).getTime()) / 1000;
-    if (secondsSince < 55) {
+    if (secondsSince < 10) {
       console.warn(
         `[AdMob SSV] 🚫 Intervalo demasiado corto: ${secondsSince.toFixed(1)}s | ` +
         `uid=${uid} | txn: ${transactionId}`
