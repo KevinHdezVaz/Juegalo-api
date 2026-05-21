@@ -40,9 +40,28 @@ const NEAR_CASHOUT_PCT  = 0.70;
 
 const PAGE_SIZE = 25;
 
-async function getCashoutRequests(page = 1) {
+async function getCashoutRequests(page = 1, search?: string) {
   const from = (page - 1) * PAGE_SIZE;
   const to   = from + PAGE_SIZE - 1;
+
+  if (search && search.trim().length > 0) {
+    const s = search.trim();
+    // Buscar user IDs que coincidan con username o email
+    const { data: matchingUsers } = await supabase
+      .from('users')
+      .select('id')
+      .or(`username.ilike.%${s}%,email.ilike.%${s}%`);
+    const userIds = (matchingUsers ?? []).map((u: any) => u.id);
+    if (userIds.length === 0) return { data: [], total: 0 };
+    const { data, count } = await supabase
+      .from('cashout_requests')
+      .select(`*, users(username, email, coins)`, { count: 'exact' })
+      .in('user_id', userIds)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    return { data: data ?? [], total: count ?? 0 };
+  }
+
   const { data, count } = await supabase
     .from('cashout_requests')
     .select(`*, users(username, email, coins)`, { count: 'exact' })
@@ -93,20 +112,6 @@ async function getPaidByPeriod(days: number): Promise<number> {
   } catch {
     return 0;
   }
-}
-
-async function getUsers(search?: string) {
-  let query = supabase
-    .from('users')
-    .select('id, username, email, coins, total_earned, streak_days, referrals_count, created_at, country_code', { count: 'exact' })
-    .order('created_at', { ascending: false })
-    .limit(50);
-  if (search && search.trim().length > 0) {
-    const s = search.trim();
-    query = query.or(`username.ilike.%${s}%,email.ilike.%${s}%`);
-  }
-  const { data, count } = await query;
-  return { data: data ?? [], total: count ?? 0 };
 }
 
 async function getNotificationLogs(limit = 30) {
@@ -163,10 +168,11 @@ export default async function AdminPage({
   const activeTab  = sp.tab ?? 'retiros';
   const admobDays  = Number(sp.days ?? 7);
   const currentPage = Math.max(1, Number(sp.page ?? 1));
+  const cashoutSearch = sp.username ?? '';
 
   // Retiros y estadísticas — siempre, sin AdMob de por medio
   const [{ data: requests, total: totalRequests }, stats] = await Promise.all([
-    getCashoutRequests(currentPage),
+    getCashoutRequests(currentPage, cashoutSearch),
     getStats(),
   ]);
 
@@ -187,11 +193,6 @@ export default async function AdminPage({
     ? await getNotificationLogs(30)
     : [];
 
-  // Usuarios — solo cuando está en ese tab
-  const userSearch = sp.username ?? '';
-  const { data: userResults, total: userTotal } = activeTab === 'usuarios'
-    ? await getUsers(userSearch)
-    : { data: [], total: 0 };
 
   // AdMob — solo cuando el usuario está en el tab de AdMob
   const [admob, paidPeriod, periods] = activeTab === 'admob'
@@ -431,22 +432,15 @@ export default async function AdminPage({
           .notif-log-sent  { font-weight:700; color:#059669; font-size:14px; }
           .notif-log-date  { color:#94A3B8; font-size:11px; white-space:nowrap; }
 
-          /* USUARIOS */
-          .user-search-wrap { background:#fff; border:1px solid #E2E8F0; border-radius:16px; padding:20px 24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
-          .user-search-title { font-size:15px; font-weight:800; color:#0F172A; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
-          .user-search-sub  { font-size:12px; color:#64748B; margin-bottom:16px; }
-          .user-search-row  { display:flex; gap:10px; }
-          .user-search-input { flex:1; padding:11px 16px; border:1.5px solid #E2E8F0; border-radius:10px; font-size:14px; font-family:inherit; color:#0F172A; outline:none; transition:border-color .15s; background:#F8FAFC; }
-          .user-search-input:focus { border-color:#6366F1; background:#fff; }
-          .user-search-btn { padding:11px 22px; background:linear-gradient(135deg,#6366F1,#4F46E5); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; transition:opacity .15s; }
-          .user-search-btn:hover { opacity:.88; }
-          .user-search-clear { padding:11px 16px; background:#F1F5F9; color:#64748B; border:1px solid #E2E8F0; border-radius:10px; font-size:13px; font-weight:600; text-decoration:none; display:flex; align-items:center; }
-          .user-search-clear:hover { background:#E2E8F0; }
-          .user-coins { font-weight:700; color:#6366F1; }
-          .user-earned { font-size:11px; color:#94A3B8; margin-top:2px; }
-          .user-streak { display:inline-flex; align-items:center; gap:3px; font-size:12px; font-weight:700; color:#F59E0B; }
-          .user-country { font-size:12px; color:#475569; font-weight:500; }
-          .user-refs { font-size:12px; color:#6366F1; font-weight:600; }
+          /* BÚSQUEDA RETIROS */
+          .search-bar-wrap { display:flex; gap:10px; margin-bottom:20px; }
+          .search-bar-input { flex:1; padding:10px 16px; border:1.5px solid #E2E8F0; border-radius:10px; font-size:14px; font-family:inherit; color:#0F172A; outline:none; transition:border-color .15s; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+          .search-bar-input:focus { border-color:#6366F1; }
+          .search-bar-btn { padding:10px 20px; background:linear-gradient(135deg,#6366F1,#4F46E5); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; }
+          .search-bar-btn:hover { opacity:.88; }
+          .search-bar-clear { padding:10px 14px; background:#F1F5F9; color:#64748B; border:1px solid #E2E8F0; border-radius:10px; font-size:13px; font-weight:600; text-decoration:none; display:flex; align-items:center; white-space:nowrap; }
+          .search-bar-clear:hover { background:#E2E8F0; }
+          .search-tag { display:inline-flex; align-items:center; gap:6px; background:#EEF2FF; color:#4338CA; border:1px solid #C7D2FE; border-radius:8px; padding:5px 12px; font-size:12px; font-weight:700; margin-bottom:16px; }
 
           .divider { border:none; border-top:1.5px solid #F1F5F9; margin:20px 0; }
 
@@ -617,15 +611,36 @@ export default async function AdminPage({
             <a href="/admin?tab=config" className={`tab-btn ${activeTab === 'config' ? 'active' : ''}`}>
               ⚙️ Config
             </a>
-            <a href="/admin?tab=usuarios" className={`tab-btn ${activeTab === 'usuarios' ? 'active' : ''}`}>
-              👤 Usuarios
-            </a>
           </div>
 
           {/* TAB: RETIROS */}
           {activeTab === 'retiros' && <div>
 
-            {pending.length > 0 && (
+            {/* Buscador de usuario */}
+            <form method="GET" action="/admin">
+              <input type="hidden" name="tab" value="retiros" />
+              <div className="search-bar-wrap">
+                <input
+                  className="search-bar-input"
+                  type="text"
+                  name="username"
+                  defaultValue={cashoutSearch}
+                  placeholder="🔍  Buscar por usuario o correo…"
+                  autoComplete="off"
+                />
+                <button type="submit" className="search-bar-btn">Buscar</button>
+                {cashoutSearch && (
+                  <a href="/admin?tab=retiros" className="search-bar-clear">✕ Limpiar</a>
+                )}
+              </div>
+            </form>
+            {cashoutSearch && (
+              <div className="search-tag">
+                🔎 Filtrando por: <strong>{cashoutSearch}</strong> — {totalRequests} retiro{totalRequests !== 1 ? 's' : ''} encontrado{totalRequests !== 1 ? 's' : ''}
+              </div>
+            )}
+
+            {!cashoutSearch && pending.length > 0 && (
               <div className="pending-wrap">
                 <div className="section-header">
                   <span className="section-title">⚡ Requieren atención</span>
@@ -697,16 +712,18 @@ export default async function AdminPage({
               </div>
             )}
 
-            <div className="section-header" style={{ marginTop: pending.length > 0 ? 8 : 0 }}>
-              <span className="section-title">Historial completo</span>
+            <div className="section-header" style={{ marginTop: (!cashoutSearch && pending.length > 0) ? 8 : 0 }}>
+              <span className="section-title">
+                {cashoutSearch ? `Retiros de "${cashoutSearch}"` : 'Historial completo'}
+              </span>
               <span className="count-pill slate">{totalRequests} total</span>
             </div>
             <div className="table-wrap">
               {requests.length === 0 ? (
                 <div className="empty">
-                  <div className="empty-icon">📭</div>
-                  <div className="empty-text">Sin solicitudes aún</div>
-                  <div className="empty-sub">Aquí aparecerán los retiros de los usuarios</div>
+                  <div className="empty-icon">{cashoutSearch ? '🔎' : '📭'}</div>
+                  <div className="empty-text">{cashoutSearch ? `Sin retiros para "${cashoutSearch}"` : 'Sin solicitudes aún'}</div>
+                  <div className="empty-sub">{cashoutSearch ? 'Prueba con otro nombre o correo' : 'Aquí aparecerán los retiros de los usuarios'}</div>
                 </div>
               ) : (
                 <table>
@@ -790,7 +807,7 @@ export default async function AdminPage({
             {totalPages > 1 && (
               <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginTop:20, paddingBottom:8 }}>
                 {currentPage > 1 && (
-                  <a href={`?tab=retiros&page=${currentPage - 1}`}
+                  <a href={`?tab=retiros&page=${currentPage - 1}${cashoutSearch ? `&username=${encodeURIComponent(cashoutSearch)}` : ''}`}
                     style={{ padding:'7px 16px', borderRadius:8, border:'1px solid #E2E8F0', background:'#fff', color:'#374151', fontWeight:600, fontSize:13, textDecoration:'none' }}>
                     ← Anterior
                   </a>
@@ -804,14 +821,14 @@ export default async function AdminPage({
                   }, [])
                   .map((p, i) => p === '...'
                     ? <span key={`ellipsis-${i}`} style={{ padding:'7px 4px', color:'#94A3B8' }}>…</span>
-                    : <a key={p} href={`?tab=retiros&page=${p}`}
+                    : <a key={p} href={`?tab=retiros&page=${p}${cashoutSearch ? `&username=${encodeURIComponent(cashoutSearch)}` : ''}`}
                         style={{ padding:'7px 13px', borderRadius:8, border:`1px solid ${p === currentPage ? '#3B82F6' : '#E2E8F0'}`, background: p === currentPage ? '#3B82F6' : '#fff', color: p === currentPage ? '#fff' : '#374151', fontWeight:600, fontSize:13, textDecoration:'none' }}>
                         {p}
                       </a>
                   )
                 }
                 {currentPage < totalPages && (
-                  <a href={`?tab=retiros&page=${currentPage + 1}`}
+                  <a href={`?tab=retiros&page=${currentPage + 1}${cashoutSearch ? `&username=${encodeURIComponent(cashoutSearch)}` : ''}`}
                     style={{ padding:'7px 16px', borderRadius:8, border:'1px solid #E2E8F0', background:'#fff', color:'#374151', fontWeight:600, fontSize:13, textDecoration:'none' }}>
                     Siguiente →
                   </a>
@@ -1350,127 +1367,6 @@ export default async function AdminPage({
                 </div>
               )}
             </div>
-
-          </div>}
-
-          {/* TAB: USUARIOS */}
-          {activeTab === 'usuarios' && <div>
-
-            {/* Barra de búsqueda */}
-            <div className="user-search-wrap">
-              <div className="user-search-title">👤 Buscar usuario</div>
-              <div className="user-search-sub">Busca por nombre de usuario o correo electrónico</div>
-              <form method="GET" action="/admin">
-                <input type="hidden" name="tab" value="usuarios" />
-                <div className="user-search-row">
-                  <input
-                    className="user-search-input"
-                    type="text"
-                    name="username"
-                    defaultValue={userSearch}
-                    placeholder="Ej: andrian, usuario@gmail.com…"
-                    autoComplete="off"
-                    autoFocus
-                  />
-                  <button type="submit" className="user-search-btn">🔍 Buscar</button>
-                  {userSearch && (
-                    <a href="/admin?tab=usuarios" className="user-search-clear">✕ Limpiar</a>
-                  )}
-                </div>
-              </form>
-            </div>
-
-            {/* Resultados */}
-            <div className="section-header">
-              <span className="section-title">
-                {userSearch ? `Resultados para "${userSearch}"` : 'Usuarios recientes'}
-              </span>
-              <span className="count-pill slate">{userTotal} encontrado{userTotal !== 1 ? 's' : ''}</span>
-            </div>
-
-            <div className="table-wrap">
-              {userResults.length === 0 ? (
-                <div className="empty">
-                  <div className="empty-icon">{userSearch ? '🔎' : '👥'}</div>
-                  <div className="empty-text">
-                    {userSearch ? `Sin resultados para "${userSearch}"` : 'Escribe algo para buscar usuarios'}
-                  </div>
-                  <div className="empty-sub">Busca por username o email</div>
-                </div>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Usuario</th>
-                      <th>Monedas</th>
-                      <th>Total ganado</th>
-                      <th>Racha</th>
-                      <th>País</th>
-                      <th>Referidos</th>
-                      <th>Registro</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {userResults.map((u: any) => {
-                      const initials = (u.username ?? 'U').substring(0, 2).toUpperCase();
-                      const createdAt = new Date(u.created_at);
-                      return (
-                        <tr key={u.id}>
-                          <td>
-                            <div className="user-cell">
-                              <div className="user-avatar">{initials}</div>
-                              <div>
-                                <div className="user-name">{u.username ?? '—'}</div>
-                                <div className="user-email">{u.email ?? '—'}</div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="user-coins">{(u.coins ?? 0).toLocaleString()}</div>
-                            <div className="user-earned">🪙 monedas</div>
-                          </td>
-                          <td>
-                            <div style={{ fontWeight: 700, color: '#059669' }}>${((u.total_earned ?? 0) / 10000).toFixed(2)}</div>
-                            <div className="user-earned">{(u.total_earned ?? 0).toLocaleString()} coins</div>
-                          </td>
-                          <td>
-                            <span className="user-streak">🔥 {u.streak_days ?? 0}</span>
-                          </td>
-                          <td>
-                            <span className="user-country">{u.country_code ?? '—'}</span>
-                          </td>
-                          <td>
-                            <span className="user-refs">{u.referrals_count ?? 0}</span>
-                          </td>
-                          <td>
-                            <div className="date-main">{createdAt.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                            <div className="date-time">{createdAt.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-                          </td>
-                          <td>
-                            <div className="actions">
-                              <a
-                                className="btn btn-review"
-                                href={`/admin?tab=notificaciones&test_user=${encodeURIComponent(u.username ?? '')}`}
-                                title="Enviar notificación de prueba"
-                              >
-                                🔔 Notif
-                              </a>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {userTotal > 50 && userSearch && (
-              <div style={{ textAlign: 'center', fontSize: 12, color: '#94A3B8', marginTop: 8 }}>
-                Mostrando los primeros 50 resultados. Refina tu búsqueda para encontrar un usuario específico.
-              </div>
-            )}
 
           </div>}
 
