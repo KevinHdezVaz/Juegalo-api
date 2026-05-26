@@ -87,9 +87,9 @@ export async function GET(req: NextRequest) {
   }
 
   // 3. Parsear y validar coin_amount
-  // Revenue share: usuario recibe 60%, app retiene 40%
+  // Revenue share: usuario recibe 35%, app retiene 65%
   const coinsRaw = Math.floor(Number(coinAmountStr));
-  const coins    = Math.floor(coinsRaw * 0.60);
+  const coins    = Math.floor(coinsRaw * 0.35);
   if (isNaN(coins) || coins <= 0) {
     return NextResponse.json({ ok: true, coins: 0 });
   }
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
         trans_uuid:    transUuid,
         adjoe_amount:  coinsRaw,   // lo que adjoe envió (ya con 60% aplicado por adjoe)
         coin_amount:   coins,      // lo que recibe el usuario (1:1 de adjoe_amount)
-        revenue_share: 0.60,
+        revenue_share: 0.35,
         currency,
         reward_type:   rewardType,
         sdk_app_id:    sdkAppId,
