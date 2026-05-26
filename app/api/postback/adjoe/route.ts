@@ -87,7 +87,9 @@ export async function GET(req: NextRequest) {
   }
 
   // 3. Parsear y validar coin_amount
-  const coins = Math.floor(Number(coinAmountStr));
+  // Revenue share: usuario recibe 20%, app retiene 80%
+  const coinsRaw = Math.floor(Number(coinAmountStr));
+  const coins    = Math.floor(coinsRaw * 0.20);
   if (isNaN(coins) || coins <= 0) {
     return NextResponse.json({ ok: true, coins: 0 });
   }
