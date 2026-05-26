@@ -87,9 +87,9 @@ export async function GET(req: NextRequest) {
   }
 
   // 3. Parsear y validar coin_amount
-  // Revenue share: usuario recibe 20%, app retiene 80%
+  // Revenue share: usuario recibe 60%, app retiene 40%
   const coinsRaw = Math.floor(Number(coinAmountStr));
-  const coins    = Math.floor(coinsRaw * 0.20);
+  const coins    = Math.floor(coinsRaw * 0.60);
   if (isNaN(coins) || coins <= 0) {
     return NextResponse.json({ ok: true, coins: 0 });
   }
@@ -103,9 +103,9 @@ export async function GET(req: NextRequest) {
       `adjoe ${rewardType || 'Playtime'}: ${coins} monedas${placement ? ` (${placement})` : ''}`,
       {
         trans_uuid:    transUuid,
-        adjoe_amount:  coinsRaw,   // lo que adjoe envió originalmente
-        coin_amount:   coins,      // lo que recibe el usuario (20%)
-        revenue_share: 0.20,
+        adjoe_amount:  coinsRaw,   // lo que adjoe envió (ya con 60% aplicado por adjoe)
+        coin_amount:   coins,      // lo que recibe el usuario (1:1 de adjoe_amount)
+        revenue_share: 0.60,
         currency,
         reward_type:   rewardType,
         sdk_app_id:    sdkAppId,
