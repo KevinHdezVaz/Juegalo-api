@@ -102,11 +102,13 @@ export async function GET(req: NextRequest) {
       'adjoe',
       `adjoe ${rewardType || 'Playtime'}: ${coins} monedas${placement ? ` (${placement})` : ''}`,
       {
-        trans_uuid:  transUuid,
-        coin_amount: coins,
+        trans_uuid:    transUuid,
+        adjoe_amount:  coinsRaw,   // lo que adjoe envió originalmente
+        coin_amount:   coins,      // lo que recibe el usuario (20%)
+        revenue_share: 0.20,
         currency,
-        reward_type: rewardType,
-        sdk_app_id:  sdkAppId,
+        reward_type:   rewardType,
+        sdk_app_id:    sdkAppId,
         placement,
       }
     );
