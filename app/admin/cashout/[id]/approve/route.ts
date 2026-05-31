@@ -26,8 +26,10 @@ export async function GET(
     return new NextResponse(`Retiro no encontrado: ${fetchError?.message}`, { status: 404 });
   }
 
+  const returnPage = req.nextUrl.searchParams.get('returnPage') ?? '1';
+
   if (cashout.status === 'paid') {
-    return NextResponse.redirect(new URL('/admin?error=ya_procesado', req.url));
+    return NextResponse.redirect(new URL(`/admin?tab=retiros&page=${returnPage}&error=ya_procesado`, req.url));
   }
 
   // ── ¿Es el primer cobro del usuario? ───────────────────────────
@@ -124,5 +126,5 @@ export async function GET(
     }
   }
 
-  return NextResponse.redirect(new URL('/admin?success=aprobado', req.url));
+  return NextResponse.redirect(new URL(`/admin?tab=retiros&page=${returnPage}&success=aprobado`, req.url));
 }

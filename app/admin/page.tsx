@@ -646,6 +646,11 @@ export default async function AdminPage({
                   <span className="section-title">⚡ Requieren atención</span>
                   <span className="count-pill amber">{pending.length} pendiente{pending.length !== 1 ? 's' : ''}</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <form method="POST" action="/admin/cashout/bulk-approve" onSubmit={(e) => { if (!confirm(`¿Ya pagaste a los ${pending.length} usuarios en PayPal? Esta acción es irreversible.`)) e.preventDefault(); }} style={{ display: 'inline' }}>
+                      <button type="submit" style={{ background: '#166534', color: '#fff', border: '1px solid #14532D', borderRadius: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        ✅ Marcar todos como pagados ({pending.length})
+                      </button>
+                    </form>
                     <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>📥 CSV PayPal:</span>
                     <a
                       href={`/admin/cashout/export-csv?page=all`}
@@ -723,7 +728,7 @@ export default async function AdminPage({
                             </td>
                             <td>
                               <div className="actions">
-                                {r.status === 'pending' && <a className="btn btn-review" href={`/admin/cashout/${r.id}/review`}>🔍 Revisar</a>}
+                                {r.status === 'pending' && <a className="btn btn-review" href={`/admin/cashout/${r.id}/review?returnTo=/admin?tab=retiros%26page=${currentPage}`}>🔍 Revisar</a>}
                                 {(r.status === 'pending' || r.status === 'processing') && r.method === 'paypal' && (() => {
                                   const { account } = parseDetail(r.payment_detail ?? r.account);
                                   const amount = Number(r.amount_usd).toFixed(2);
@@ -732,8 +737,8 @@ export default async function AdminPage({
                                     <span dangerouslySetInnerHTML={{ __html: `<a href="${paypalUrl}" target="_blank" onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');setTimeout(()=>{},100)" class="btn" style="background:#003087;color:#fff;border-color:#003087;text-decoration:none;display:inline-flex;align-items:center;gap:4px" title="Abre PayPal y copia el email al portapapeles">💸 Pagar $${amount}</a>` }} />
                                   );
                                 })()}
-                                <a className="btn btn-approve" href={`/admin/cashout/${r.id}/approve`}>✓ Pagado</a>
-                                <a className="btn btn-reject"  href={`/admin/cashout/${r.id}/reject`}>✗ Rechazar</a>
+                                <a className="btn btn-approve" href={`/admin/cashout/${r.id}/approve?returnPage=${currentPage}`}>✓ Pagado</a>
+                                <a className="btn btn-reject"  href={`/admin/cashout/${r.id}/reject?returnPage=${currentPage}`}>✗ Rechazar</a>
                               </div>
                             </td>
                           </tr>

@@ -12,6 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const returnPage = _req.nextUrl.searchParams.get('returnPage') ?? '1';
 
   // Obtener la solicitud para devolver monedas y notificar
   const { data: req } = await supabase
@@ -53,5 +54,5 @@ export async function GET(
     });
   }
 
-  return NextResponse.redirect(new URL('/admin?success=rechazado', _req.url));
+  return NextResponse.redirect(new URL(`/admin?tab=retiros&page=${returnPage}&success=rechazado`, _req.url));
 }
