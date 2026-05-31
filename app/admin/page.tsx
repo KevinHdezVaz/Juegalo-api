@@ -39,6 +39,19 @@ const MIN_CASHOUT_COINS = 10_000;
 const NEAR_CASHOUT_PCT  = 0.70;
 
 const PAGE_SIZE = 25;
+const PENDING_PAGE_SIZE = 10;
+
+async function getPendingRequests(pendingPage = 1) {
+  const from = (pendingPage - 1) * PENDING_PAGE_SIZE;
+  const to   = from + PENDING_PAGE_SIZE - 1;
+  const { data, count } = await supabase
+    .from('cashout_requests')
+    .select(`*, users(username, email, coins)`, { count: 'exact' })
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+    .range(from, to);
+  return { data: data ?? [], total: count ?? 0 };
+}
 
 async function getCashoutRequests(page = 1, search?: string) {
   const from = (page - 1) * PAGE_SIZE;
@@ -162,17 +175,19 @@ export const revalidate = 0;
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string; days?: string; page?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string; days?: string; page?: string; pp?: string }>;
 }) {
   const sp = await searchParams;
-  const activeTab  = sp.tab ?? 'retiros';
-  const admobDays  = Number(sp.days ?? 7);
+  const activeTab   = sp.tab ?? 'retiros';
+  const admobDays   = Number(sp.days ?? 7);
   const currentPage = Math.max(1, Number(sp.page ?? 1));
+  const pendingPage = Math.max(1, Number(sp.pp ?? 1));
   const cashoutSearch = sp.username ?? '';
 
   // Retiros y estadísticas — siempre, sin AdMob de por medio
-  const [{ data: requests, total: totalRequests }, stats] = await Promise.all([
+  const [{ data: requests, total: totalRequests }, { data: pendingData, total: totalPending }, stats] = await Promise.all([
     getCashoutRequests(currentPage, cashoutSearch),
+    getPendingRequests(pendingPage),
     getStats(),
   ]);
 
@@ -211,7 +226,8 @@ export default async function AdminPage({
   const activePreset = sp.preset ?? '';
   const sentCount   = sp.sent   ? Number(sp.sent)   : null;
   const totalCount  = sp.total  ? Number(sp.total)  : null;
-  const pending     = requests.filter((r: any) => r.status === 'pending' || r.status === 'processing');
+  const pending          = pendingData; // pendientes paginados independientemente
+  const totalPendingPages = Math.ceil(totalPending / PENDING_PAGE_SIZE);
   const totalPages  = Math.ceil(totalRequests / PAGE_SIZE);
 
   // Rentabilidad AdMob (valores con guardia por si algo falla en runtime)
@@ -640,39 +656,35 @@ export default async function AdminPage({
               </div>
             )}
 
-            {!cashoutSearch && pending.length > 0 && (
+            {!cashoutSearch && (totalPending > 0 || pending.length > 0) && (
               <div className="pending-wrap">
                 <div className="section-header">
                   <span className="section-title">⚡ Requieren atención</span>
-                  <span className="count-pill amber">{pending.length} pendiente{pending.length !== 1 ? 's' : ''}</span>
+                  <span className="count-pill amber">{totalPending} pendiente{totalPending !== 1 ? 's' : ''} · pág {pendingPage}/{totalPendingPages}</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <form method="POST" action="/admin/cashout/bulk-approve" onSubmit={(e) => { if (!confirm(`¿Ya pagaste a los ${pending.length} usuarios en PayPal? Esta acción es irreversible.`)) e.preventDefault(); }} style={{ display: 'inline' }}>
-                      <button type="submit" style={{ background: '#166534', color: '#fff', border: '1px solid #14532D', borderRadius: 8, padding: '5px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        ✅ Marcar todos como pagados ({pending.length})
-                      </button>
-                    </form>
+                    {/* CSV de esta página exacta de pendientes */}
                     <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>📥 CSV PayPal:</span>
                     <a
-                      href={`/admin/cashout/export-csv?page=all`}
-                      style={{
-                        background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0',
-                        borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
-                        textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-                      }}
-                      title="Descarga todos los pendientes (PayPal) ordenados por fecha"
-                    >
-                      ⬇️ Todos los pendientes
-                    </a>
-                    <a
-                      href={`/admin/cashout/export-csv?page=${currentPage}`}
+                      href={`/admin/cashout/export-csv?pp=${pendingPage}`}
                       style={{
                         background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE',
                         borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
                         textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
                       }}
-                      title={`Descarga solo los pendientes de la página ${currentPage} del panel`}
+                      title={`Descarga los ${PENDING_PAGE_SIZE} pendientes de esta página`}
                     >
-                      ⬇️ Página {currentPage}
+                      ⬇️ Esta página ({pendingPage})
+                    </a>
+                    <a
+                      href={`/admin/cashout/export-csv?pp=all`}
+                      style={{
+                        background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0',
+                        borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                        textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+                      }}
+                      title="Descarga TODOS los pendientes"
+                    >
+                      ⬇️ Todos ({totalPending})
                     </a>
                   </div>
                 </div>
@@ -737,8 +749,8 @@ export default async function AdminPage({
                                     <span dangerouslySetInnerHTML={{ __html: `<a href="${paypalUrl}" target="_blank" onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');setTimeout(()=>{},100)" class="btn" style="background:#003087;color:#fff;border-color:#003087;text-decoration:none;display:inline-flex;align-items:center;gap:4px" title="Abre PayPal y copia el email al portapapeles">💸 Pagar $${amount}</a>` }} />
                                   );
                                 })()}
-                                <a className="btn btn-approve" href={`/admin/cashout/${r.id}/approve?returnPage=${currentPage}`}>✓ Pagado</a>
-                                <a className="btn btn-reject"  href={`/admin/cashout/${r.id}/reject?returnPage=${currentPage}`}>✗ Rechazar</a>
+                                <a className="btn btn-approve" href={`/admin/cashout/${r.id}/approve?returnPage=${currentPage}&pp=${pendingPage}`}>✓ Pagado</a>
+                                <a className="btn btn-reject"  href={`/admin/cashout/${r.id}/reject?returnPage=${currentPage}&pp=${pendingPage}`}>✗ Rechazar</a>
                               </div>
                             </td>
                           </tr>
@@ -747,6 +759,25 @@ export default async function AdminPage({
                     </tbody>
                   </table>
                 </div>
+
+                {/* Paginación de pendientes */}
+                {totalPendingPages > 1 && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', padding: '12px 0 4px' }}>
+                    {pendingPage > 1 && (
+                      <a href={`?tab=retiros&pp=${pendingPage - 1}`} style={{ background: '#1E293B', color: '#94A3B8', border: '1px solid #334155', borderRadius: 8, padding: '5px 14px', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                        ← Anterior
+                      </a>
+                    )}
+                    <span style={{ fontSize: 12, color: '#64748B' }}>
+                      Página <strong style={{ color: '#F8FAFC' }}>{pendingPage}</strong> de {totalPendingPages} · {totalPending} pendientes
+                    </span>
+                    {pendingPage < totalPendingPages && (
+                      <a href={`?tab=retiros&pp=${pendingPage + 1}`} style={{ background: '#1E293B', color: '#94A3B8', border: '1px solid #334155', borderRadius: 8, padding: '5px 14px', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                        Siguiente →
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
