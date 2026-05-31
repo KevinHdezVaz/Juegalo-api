@@ -662,19 +662,22 @@ export default async function AdminPage({
                   <span className="section-title">⚡ Requieren atención</span>
                   <span className="count-pill amber">{totalPending} pendiente{totalPending !== 1 ? 's' : ''} · pág {pendingPage}/{totalPendingPages}</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* CSV de esta página exacta de pendientes */}
                     <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>📥 CSV PayPal:</span>
-                    <a
-                      href={`/admin/cashout/export-csv?pp=${pendingPage}`}
-                      style={{
-                        background: '#EFF6FF', color: '#1E40AF', border: '1px solid #BFDBFE',
-                        borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
-                        textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-                      }}
-                      title={`Descarga los ${PENDING_PAGE_SIZE} pendientes de esta página`}
-                    >
-                      ⬇️ Esta página ({pendingPage})
-                    </a>
+                    {/* Botón dinámico: descarga seleccionados o página completa */}
+                    <span dangerouslySetInnerHTML={{ __html: `
+                      <button id="btn-csv-sel"
+                        onclick="(function(){
+                          var ids=Array.from(document.querySelectorAll('.pending-cb:checked')).map(function(c){return c.dataset.id});
+                          var url=ids.length>0
+                            ? '/admin/cashout/export-csv?ids='+ids.join(',')
+                            : '/admin/cashout/export-csv?pp=${pendingPage}';
+                          window.location.href=url;
+                        })()"
+                        style="background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px"
+                        title="Descarga los seleccionados (o toda la página si no hay ninguno marcado)">
+                        ⬇️ <span id="csv-sel-label">Esta página (${pendingPage})</span>
+                      </button>
+                    ` }} />
                     <a
                       href={`/admin/cashout/export-csv?pp=all`}
                       style={{
@@ -688,10 +691,36 @@ export default async function AdminPage({
                     </a>
                   </div>
                 </div>
+                {/* Script para actualizar el label del botón según selección */}
+                <script dangerouslySetInnerHTML={{ __html: `
+                  function updateCsvBtn() {
+                    var checked = document.querySelectorAll('.pending-cb:checked').length;
+                    var all     = document.querySelectorAll('.pending-cb').length;
+                    var lbl     = document.getElementById('csv-sel-label');
+                    var selAll  = document.getElementById('pending-check-all');
+                    if (!lbl) return;
+                    if (checked === 0)        lbl.textContent = 'Esta página (${pendingPage})';
+                    else if (checked === all) lbl.textContent = 'Seleccionados (' + checked + ') ✓ todos';
+                    else                      lbl.textContent = 'Seleccionados (' + checked + ')';
+                    if (selAll) selAll.indeterminate = checked > 0 && checked < all;
+                    if (selAll) selAll.checked = checked === all && all > 0;
+                  }
+                  document.addEventListener('change', function(e) {
+                    if (e.target && (e.target.classList.contains('pending-cb') || e.target.id === 'pending-check-all')) {
+                      if (e.target.id === 'pending-check-all') {
+                        document.querySelectorAll('.pending-cb').forEach(function(c){ c.checked = e.target.checked; });
+                      }
+                      updateCsvBtn();
+                    }
+                  });
+                ` }} />
                 <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
+                        <th style={{ width: 36, textAlign: 'center' }}>
+                          <input type="checkbox" id="pending-check-all" title="Seleccionar todos" style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                        </th>
                         <th>Usuario</th><th>Monto</th><th>Método</th><th>Cuenta destino</th><th>Fecha</th><th>Acciones</th>
                       </tr>
                     </thead>
@@ -702,6 +731,9 @@ export default async function AdminPage({
                         const initials = (r.users?.username ?? 'U').substring(0, 2).toUpperCase();
                         return (
                           <tr key={r.id}>
+                            <td style={{ textAlign: 'center' }}>
+                              <input type="checkbox" className="pending-cb" data-id={r.id} style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                            </td>
                             <td>
                               <div className="user-cell">
                                 <div className="user-avatar">{initials}</div>

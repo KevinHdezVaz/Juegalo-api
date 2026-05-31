@@ -6,25 +6,31 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
-// GET /admin/cashout/export-csv?pp=1   → página 1 de pendientes (10 por página)
-// GET /admin/cashout/export-csv?pp=all → todos los pendientes
+// GET /admin/cashout/export-csv?ids=id1,id2,id3 → solo los IDs seleccionados
+// GET /admin/cashout/export-csv?pp=1            → página 1 de pendientes (10 por página)
+// GET /admin/cashout/export-csv?pp=all          → todos los pendientes
 export async function GET(req: NextRequest) {
+  const idsParam   = req.nextUrl.searchParams.get('ids');
   const ppParam    = req.nextUrl.searchParams.get('pp') ?? 'all';
-  const PAGE_SIZE  = 10; // mismo que PENDING_PAGE_SIZE del panel
+  const PAGE_SIZE  = 10;
 
   let query = supabase
     .from('cashout_requests')
     .select('id, amount_usd, account, method')
     .eq('status', 'pending')
     .eq('method', 'paypal')
-    .order('created_at', { ascending: true }); // más antiguos primero
+    .order('created_at', { ascending: true });
 
-  if (ppParam !== 'all') {
+  if (idsParam) {
+    // Filtrar por IDs específicos seleccionados con checkboxes
+    const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+    query = query.in('id', ids);
+  } else if (ppParam !== 'all') {
     const page   = Math.max(1, Number(ppParam));
     const offset = (page - 1) * PAGE_SIZE;
     query = query.range(offset, offset + PAGE_SIZE - 1);
   }
-  // si pp === 'all', descarga todo sin límite
+  // si pp === 'all' y no hay ids, descarga todo sin límite
 
   const { data, error } = await query;
 
@@ -58,7 +64,7 @@ export async function GET(req: NextRequest) {
   const csv    = [header, ...rows].join('\n');
 
   const date     = new Date().toISOString().slice(0, 10);
-  const label    = ppParam !== 'all' ? `-p${ppParam}` : '-all';
+  const label    = idsParam ? `-sel${idsParam.split(',').length}` : ppParam !== 'all' ? `-p${ppParam}` : '-all';
   const filename = `juegalo-payouts${label}-${date}.csv`;
 
   return new NextResponse(csv, {
