@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     const raw = r.account ?? '';
     const { email, currency } = parseAccount(raw);
     const amount    = Number(r.amount_usd).toFixed(2);
-    const note      = 'Pago JUEGALO';
+    const note      = 'RETIRO JUEGALO APP GANA DINERO - RECUERDA DARNOS 5 ESTRELLAS EN LA TIENDA PARA TRAER MEJORES PREMIOS. GRACIAS POR JUGAR';
     const safeEmail = `"${email.replace(/"/g, '""')}"`;
     return `${safeEmail},${amount},${currency},${note}`;
   });
