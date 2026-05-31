@@ -645,6 +645,23 @@ export default async function AdminPage({
                 <div className="section-header">
                   <span className="section-title">⚡ Requieren atención</span>
                   <span className="count-pill amber">{pending.length} pendiente{pending.length !== 1 ? 's' : ''}</span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>📥 Exportar CSV PayPal:</span>
+                    {[10, 20, 30].map(n => (
+                      <a
+                        key={n}
+                        href={`/admin/cashout/export-csv?limit=${n}`}
+                        style={{
+                          background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0',
+                          borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                          textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}
+                        title={`Descargar CSV con los ${n} pagos pendientes más antiguos`}
+                      >
+                        ⬇️ {n}
+                      </a>
+                    ))}
+                  </div>
                 </div>
                 <div className="table-wrap">
                   <table>
