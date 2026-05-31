@@ -6,21 +6,22 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
-// GET /admin/cashout/export-csv?limit=10|20|30
+// GET /admin/cashout/export-csv?limit=10&offset=0
 export async function GET(req: NextRequest) {
   const limit = Math.min(
     Math.max(1, Number(req.nextUrl.searchParams.get('limit') ?? 10)),
-    50 // máx 50 por seguridad
+    50
   );
+  const offset = Math.max(0, Number(req.nextUrl.searchParams.get('offset') ?? 0));
 
-  // Traer los N pendientes más antiguos vía PayPal
+  // Solo status='pending' — NUNCA exportar pagados para evitar doble pago
   const { data, error } = await supabase
     .from('cashout_requests')
     .select('id, amount_usd, account, method')
     .eq('status', 'pending')
     .eq('method', 'paypal')
-    .order('created_at', { ascending: true })
-    .limit(limit);
+    .order('created_at', { ascending: true }) // más antiguos primero
+    .range(offset, offset + limit - 1);
 
   if (error || !data) {
     console.error('[CSV export] Supabase error:', error);
