@@ -646,25 +646,26 @@ export default async function AdminPage({
                   <span className="section-title">⚡ Requieren atención</span>
                   <span className="count-pill amber">{pending.length} pendiente{pending.length !== 1 ? 's' : ''}</span>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>📥 CSV PayPal (solo pendientes):</span>
-                    {[
-                      { label: '#1–10',   limit: 10, offset: 0  },
-                      { label: '#11–30',  limit: 20, offset: 10 },
-                      { label: '#31–60',  limit: 30, offset: 30 },
-                    ].map(({ label, limit, offset }) => (
-                      <a
-                        key={label}
-                        href={`/admin/cashout/export-csv?limit=${limit}&offset=${offset}`}
-                        style={{
-                          background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0',
-                          borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
-                          textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-                        }}
-                        title={`Exportar pagos pendientes ${label} — solo status=pending, nunca pagados`}
-                      >
-                        ⬇️ {label}
-                      </a>
-                    ))}
+                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>📥 CSV PayPal · página {currentPage}:</span>
+                    {[10, 20, 30].map(n => {
+                      const offset = (currentPage - 1) * PAGE_SIZE;
+                      const start  = offset + 1;
+                      const end    = offset + n;
+                      return (
+                        <a
+                          key={n}
+                          href={`/admin/cashout/export-csv?limit=${n}&offset=${offset}`}
+                          style={{
+                            background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0',
+                            borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
+                            textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
+                          }}
+                          title={`Exportar ${n} pendientes desde la posición ${start} — solo status=pending`}
+                        >
+                          ⬇️ {n} (#{start}–{end})
+                        </a>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="table-wrap">
