@@ -16,14 +16,15 @@ export async function GET(req: NextRequest) {
   // Traer los N pendientes más antiguos vía PayPal
   const { data, error } = await supabase
     .from('cashout_requests')
-    .select('id, amount_usd, account, payment_detail, method, users(username, email)')
+    .select('id, amount_usd, account, method')
     .eq('status', 'pending')
     .eq('method', 'paypal')
     .order('created_at', { ascending: true })
     .limit(limit);
 
   if (error || !data) {
-    return new NextResponse('Error obteniendo datos', { status: 500 });
+    console.error('[CSV export] Supabase error:', error);
+    return new NextResponse(`Error: ${error?.message ?? 'Sin datos'}`, { status: 500 });
   }
 
   // Parsear "correo@paypal.com | USD" → correo limpio
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
   // Construir CSV en formato PayPal Mass Pay
   // Columnas: Email, Amount, Currency, Note
   const rows = data.map((r: any) => {
-    const raw = r.payment_detail ?? r.account ?? '';
+    const raw = r.account ?? '';
     const { email, currency } = parseAccount(raw);
     const amount = Number(r.amount_usd).toFixed(2);
     const note   = 'Pago JUEGALO';
