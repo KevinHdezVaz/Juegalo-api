@@ -843,14 +843,6 @@ export default async function AdminPage({
                           </td>
                           <td>
                             <div className="actions">
-                              {(r.status === 'pending' || r.status === 'processing') && r.method === 'paypal' && (() => {
-                                const { account } = parseDetail(r.payment_detail ?? r.account);
-                                const amount = Number(r.amount_usd).toFixed(2);
-                                const paypalUrl = `https://www.paypal.com/myaccount/transfer/homepage/pay?toEmail=${encodeURIComponent(account)}&amount=${amount}&currencyCode=USD`;
-                                return (
-                                  <span dangerouslySetInnerHTML={{ __html: `<a href="${paypalUrl}" target="_blank" onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');setTimeout(()=>{},100)" class="btn" style="background:#003087;color:#fff;border-color:#003087;text-decoration:none;display:inline-flex;align-items:center;gap:4px" title="Abre PayPal y copia el email al portapapeles">💸 Pagar $${amount}</a>` }} />
-                                );
-                              })()}
                               {r.status === 'pending' && (
                                 <>
                                   <a className="btn btn-review"  href={`/admin/cashout/${r.id}/review`}>🔍 Revisar</a>
