@@ -661,35 +661,6 @@ export default async function AdminPage({
                 <div className="section-header">
                   <span className="section-title">⚡ Requieren atención</span>
                   <span className="count-pill amber">{totalPending} pendiente{totalPending !== 1 ? 's' : ''} · pág {pendingPage}/{totalPendingPages}</span>
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 12, color: '#64748B', fontWeight: 500 }}>📥 CSV PayPal:</span>
-                    {/* Botón dinámico: descarga seleccionados o página completa */}
-                    <span dangerouslySetInnerHTML={{ __html: `
-                      <button id="btn-csv-sel"
-                        onclick="(function(){
-                          var ids=Array.from(document.querySelectorAll('.pending-cb:checked')).map(function(c){return c.dataset.id});
-                          var url=ids.length>0
-                            ? '/admin/cashout/export-csv?ids='+ids.join(',')
-                            : '/admin/cashout/export-csv?pp=${pendingPage}';
-                          window.location.href=url;
-                        })()"
-                        style="background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px"
-                        title="Descarga los seleccionados (o toda la página si no hay ninguno marcado)">
-                        ⬇️ <span id="csv-sel-label">Esta página (${pendingPage})</span>
-                      </button>
-                    ` }} />
-                    <a
-                      href={`/admin/cashout/export-csv?pp=all`}
-                      style={{
-                        background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0',
-                        borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700,
-                        textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-                      }}
-                      title="Descarga TODOS los pendientes"
-                    >
-                      ⬇️ Todos ({totalPending})
-                    </a>
-                  </div>
                 </div>
                 {/* Script para actualizar el label del botón según selección */}
                 <script dangerouslySetInnerHTML={{ __html: `
@@ -773,14 +744,6 @@ export default async function AdminPage({
                             <td>
                               <div className="actions">
                                 {r.status === 'pending' && <a className="btn btn-review" href={`/admin/cashout/${r.id}/review?returnTo=/admin?tab=retiros%26page=${currentPage}`}>🔍 Revisar</a>}
-                                {(r.status === 'pending' || r.status === 'processing') && r.method === 'paypal' && (() => {
-                                  const { account } = parseDetail(r.payment_detail ?? r.account);
-                                  const amount = Number(r.amount_usd).toFixed(2);
-                                  const paypalUrl = `https://www.paypal.com/myaccount/transfer/homepage/pay?toEmail=${encodeURIComponent(account)}&amount=${amount}&currencyCode=USD`;
-                                  return (
-                                    <span dangerouslySetInnerHTML={{ __html: `<a href="${paypalUrl}" target="_blank" onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');setTimeout(()=>{},100)" class="btn" style="background:#003087;color:#fff;border-color:#003087;text-decoration:none;display:inline-flex;align-items:center;gap:4px" title="Abre PayPal y copia el email al portapapeles">💸 Pagar $${amount}</a>` }} />
-                                  );
-                                })()}
                                 <a className="btn btn-approve" href={`/admin/cashout/${r.id}/approve?returnPage=${currentPage}&pp=${pendingPage}`}>✓ Pagado</a>
                                 <a className="btn btn-reject"  href={`/admin/cashout/${r.id}/reject?returnPage=${currentPage}&pp=${pendingPage}`}>✗ Rechazar</a>
                               </div>
