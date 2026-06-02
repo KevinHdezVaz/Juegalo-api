@@ -35,7 +35,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 );
 
-const MIN_CASHOUT_COINS = 10_000;
+const MIN_CASHOUT_COINS = 20_000;
 const NEAR_CASHOUT_PCT  = 0.70;
 
 const PAGE_SIZE = 25;
@@ -603,7 +603,7 @@ export default async function AdminPage({
               <div className="stat-top"><div className="stat-icon sky">✅</div></div>
               <div className="stat-value">{stats.readyCashout}</div>
               <div className="stat-label">Listos para cobrar</div>
-              <div className="stat-sub">≥ 10,000 monedas ($1.00)</div>
+              <div className="stat-sub">≥ 20,000 monedas ($2.00)</div>
             </div>
             <div className="stat-card violet">
               <div className="stat-top"><div className="stat-icon violet">🎯</div></div>
