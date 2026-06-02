@@ -78,7 +78,8 @@ async function getCashoutRequests(page = 1, search?: string) {
   const { data, count } = await supabase
     .from('cashout_requests')
     .select(`*, users(username, email, coins)`, { count: 'exact' })
-    .order('created_at', { ascending: false })
+    .neq('status', 'paid')          // ocultar pagados de la tabla principal
+    .order('created_at', { ascending: true })  // más antiguos primero
     .range(from, to);
   return { data: data ?? [], total: count ?? 0 };
 }
@@ -656,7 +657,7 @@ export default async function AdminPage({
               </div>
             )}
 
-            {!cashoutSearch && (totalPending > 0 || pending.length > 0) && (
+            {false && !cashoutSearch && (totalPending > 0 || pending.length > 0) && (
               <div className="pending-wrap">
                 <div className="section-header">
                   <span className="section-title">⚡ Requieren atención</span>
@@ -776,11 +777,11 @@ export default async function AdminPage({
               </div>
             )}
 
-            <div className="section-header" style={{ marginTop: (!cashoutSearch && pending.length > 0) ? 8 : 0 }}>
+            <div className="section-header" style={{ marginTop: 0 }}>
               <span className="section-title">
-                {cashoutSearch ? `Retiros de "${cashoutSearch}"` : 'Historial completo'}
+                {cashoutSearch ? `Retiros de "${cashoutSearch}"` : '⏳ Retiros pendientes'}
               </span>
-              <span className="count-pill slate">{totalRequests} total</span>
+              <span className="count-pill slate">{totalRequests} sin pagar</span>
             </div>
             <div className="table-wrap">
               {requests.length === 0 ? (
