@@ -145,9 +145,9 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Acreditar monedas ──────────────────────────────────────────────────────
-  // Siempre 30 monedas fijas — ignoramos reward_amount de AdMob para evitar
+  // Siempre 27 monedas fijas — ignoramos reward_amount de AdMob para evitar
   // manipulación del parámetro.
-  const coins = 30;
+  const coins = 27;
 
   try {
     await creditCoins(
