@@ -48,7 +48,21 @@ async function getPendingRequests(pendingPage = 1) {
     .from('cashout_requests')
     .select(`*, users(username, email, coins)`, { count: 'exact' })
     .eq('status', 'pending')
+    .eq('paypal_issue', false)              // excluir los marcados como problema
     .order('created_at', { ascending: true })
+    .range(from, to);
+  return { data: data ?? [], total: count ?? 0 };
+}
+
+async function getPayPalIssueRequests(page = 1) {
+  const from = (page - 1) * PENDING_PAGE_SIZE;
+  const to   = from + PENDING_PAGE_SIZE - 1;
+  const { data, count } = await supabase
+    .from('cashout_requests')
+    .select(`*, users(username, email, coins)`, { count: 'exact' })
+    .eq('status', 'pending')
+    .eq('paypal_issue', true)
+    .order('paypal_issue_at', { ascending: false })
     .range(from, to);
   return { data: data ?? [], total: count ?? 0 };
 }
@@ -176,19 +190,26 @@ export const revalidate = 0;
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string; days?: string; page?: string; pp?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; tab?: string; preset?: string; sent?: string; total?: string; username?: string; days?: string; page?: string; pp?: string; ip?: string }>;
 }) {
   const sp = await searchParams;
   const activeTab   = sp.tab ?? 'retiros';
   const admobDays   = Number(sp.days ?? 7);
   const currentPage = Math.max(1, Number(sp.page ?? 1));
   const pendingPage = Math.max(1, Number(sp.pp ?? 1));
+  const issuePage   = Math.max(1, Number(sp.ip ?? 1));
   const cashoutSearch = sp.username ?? '';
 
   // Retiros y estadísticas — siempre, sin AdMob de por medio
-  const [{ data: requests, total: totalRequests }, { data: pendingData, total: totalPending }, stats] = await Promise.all([
+  const [
+    { data: requests, total: totalRequests },
+    { data: pendingData, total: totalPending },
+    { data: issueData, total: totalIssue },
+    stats,
+  ] = await Promise.all([
     getCashoutRequests(currentPage, cashoutSearch),
     getPendingRequests(pendingPage),
+    getPayPalIssueRequests(issuePage),
     getStats(),
   ]);
 
@@ -228,7 +249,9 @@ export default async function AdminPage({
   const sentCount   = sp.sent   ? Number(sp.sent)   : null;
   const totalCount  = sp.total  ? Number(sp.total)  : null;
   const pending          = pendingData; // pendientes paginados independientemente
+  const issueRows        = issueData;   // cobros con problema PayPal
   const totalPendingPages = Math.ceil(totalPending / PENDING_PAGE_SIZE);
+  const totalIssuePages   = Math.ceil(totalIssue / PENDING_PAGE_SIZE);
   const totalPages  = Math.ceil(totalRequests / PAGE_SIZE);
 
   // Rentabilidad AdMob (valores con guardia por si algo falla en runtime)
@@ -568,6 +591,8 @@ export default async function AdminPage({
           {successMsg === 'aprobado'    && <div className="alert alert-success">✅ Marcado como pagado. Recuerda enviar el dinero manualmente por PayPal.</div>}
           {successMsg === 'en_revision' && <div className="alert alert-info">🔍 Solicitud en revisión. El usuario ya lo puede ver en la app.</div>}
           {successMsg === 'rechazado'   && <div className="alert alert-error">🚫 Retiro rechazado. Monedas devueltas y usuario notificado.</div>}
+          {successMsg === 'paypal_problema' && <div className="alert alert-error">❌ Marcado como "PayPal no funciona". El cobro sigue pendiente y las monedas siguen retenidas. Lo encuentras en el tab rojo.</div>}
+          {successMsg === 'paypal_ok'   && <div className="alert alert-success">↩ Cobro devuelto a la cola normal de pendientes.</div>}
           {successMsg === 'enviado'     && <div className="alert alert-success">📤 Notificación enviada a {sentCount ?? '?'}{totalCount != null ? ` de ${totalCount}` : ''} dispositivos.</div>}
           {successMsg === 'prueba'      && <div className="alert alert-success">✅ Notificación de prueba enviada a <strong>{decodeURIComponent(sp.username ?? '')}</strong>.</div>}
           {errorMsg === 'ya_procesado'  && <div className="alert alert-error">⚠️ Este retiro ya fue procesado anteriormente.</div>}
@@ -618,6 +643,10 @@ export default async function AdminPage({
             <a href="/admin?tab=retiros" className={`tab-btn ${activeTab === 'retiros' ? 'active' : ''}`}>
               💳 Retiros
               {pending.length > 0 && <span className="tab-badge">{pending.length}</span>}
+            </a>
+            <a href="/admin?tab=paypal-issue" className={`tab-btn ${activeTab === 'paypal-issue' ? 'active' : ''}`} style={{ borderLeft: '3px solid #DC2626' }}>
+              ❌ PayPal no funciona
+              {totalIssue > 0 && <span className="tab-badge" style={{ background: '#FEE2E2', color: '#991B1B' }}>{totalIssue}</span>}
             </a>
             <a href="/admin?tab=notificaciones" className={`tab-btn ${activeTab === 'notificaciones' ? 'active' : ''}`}>
               🔔 Notificaciones
@@ -747,6 +776,7 @@ export default async function AdminPage({
                                 {r.status === 'pending' && <a className="btn btn-review" href={`/admin/cashout/${r.id}/review?returnTo=/admin?tab=retiros%26page=${currentPage}`}>🔍 Revisar</a>}
                                 <a className="btn btn-approve" href={`/admin/cashout/${r.id}/approve?returnPage=${currentPage}&pp=${pendingPage}`}>✓ Pagado</a>
                                 <a className="btn btn-reject"  href={`/admin/cashout/${r.id}/reject?returnPage=${currentPage}&pp=${pendingPage}`}>✗ Rechazar</a>
+                                <a className="btn" style={{ background:'#FEF2F2', color:'#991B1B', border:'1px solid #FECACA' }} title="Marcar como problema PayPal (queda pendiente, va al tab aparte)" href={`/admin/cashout/${r.id}/paypal-issue?returnPage=${currentPage}&pp=${pendingPage}&from=retiros`}>❌ PayPal no funciona</a>
                               </div>
                             </td>
                           </tr>
@@ -904,6 +934,111 @@ export default async function AdminPage({
               </div>
             )}
 
+          </div>}
+
+          {/* TAB: PAYPAL NO FUNCIONA */}
+          {activeTab === 'paypal-issue' && <div>
+            <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:14, padding:'14px 18px', marginBottom:18, display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ fontSize:22 }}>❌</div>
+              <div>
+                <div style={{ fontWeight:800, color:'#991B1B', fontSize:14 }}>Cobros con problema en PayPal</div>
+                <div style={{ fontSize:12, color:'#7F1D1D', marginTop:2 }}>
+                  Estos pedidos siguen <strong>pendientes</strong> — las monedas del usuario están retenidas.
+                  Cuando el usuario actualice su PayPal, dale "Volver a la cola" para procesarlo normalmente.
+                </div>
+              </div>
+            </div>
+
+            {issueRows.length === 0 ? (
+              <div style={{ background:'#fff', border:'1px solid #E2E8F0', borderRadius:14, padding:'48px 24px', textAlign:'center', color:'#64748B' }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>🎉</div>
+                <div style={{ fontWeight:700, color:'#0F172A', marginBottom:4 }}>No hay cobros con problema</div>
+                <div style={{ fontSize:13 }}>Cuando marques un cobro con "❌ PayPal no funciona" aparecerá aquí.</div>
+              </div>
+            ) : (
+              <>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Usuario</th><th>Monto</th><th>Método</th><th>Cuenta destino</th><th>Marcado</th><th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {issueRows.map((r: any) => {
+                        const m = METHOD_CONFIG[r.method] ?? { label: r.method, color: '#475569', bg: '#F1F5F9', border: '#E2E8F0' };
+                        const initials = (r.users?.username ?? 'U').substring(0, 2).toUpperCase();
+                        return (
+                          <tr key={r.id} style={{ background:'#FEF2F2' }}>
+                            <td>
+                              <div className="user-cell">
+                                <div className="user-avatar" style={{ background:'#FECACA', color:'#991B1B' }}>{initials}</div>
+                                <div>
+                                  <div className="user-name">{r.users?.username ?? 'Jugador'}</div>
+                                  <div className="user-email">{r.users?.email ?? '—'}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="amount-usd">${Number(r.amount_usd).toFixed(2)}</div>
+                              <div className="amount-coins">{(r.coins ?? 0).toLocaleString()} monedas</div>
+                            </td>
+                            <td>
+                              <span className="method-badge" style={{ background: m.bg, color: m.color, borderColor: m.border }}>
+                                <span className="method-dot" style={{ background: m.color }} />{m.label}
+                              </span>
+                            </td>
+                            <td>
+                              {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
+                                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                                  <span className="account-text" style={{ color:'#991B1B', fontWeight:700 }}>{account}</span>
+                                  <span dangerouslySetInnerHTML={{ __html: `<button onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');this.innerHTML='✓';this.style.color='#10B981';setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)" title="Copiar correo" style="background:#fff;border:1px solid #FECACA;cursor:pointer;font-size:14px;color:#64748B;padding:3px 6px;border-radius:6px;line-height:1">📋</button>` }} />
+                                </div>
+                                {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
+                              </>); })()}
+                            </td>
+                            <td>
+                              {r.paypal_issue_at && (
+                                <>
+                                  <div className="date-main">{new Date(r.paypal_issue_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}</div>
+                                  <div className="date-time">{new Date(r.paypal_issue_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
+                                </>
+                              )}
+                              <div style={{ marginTop:4, fontSize:11, color:'#7F1D1D', fontWeight:600 }}>Pedido #{String(r.id).substring(0, 8)}</div>
+                            </td>
+                            <td>
+                              <div className="actions">
+                                <a className="btn" style={{ background:'#ECFDF5', color:'#065F46', border:'1px solid #A7F3D0' }} title="Volver el cobro a la cola normal" href={`/admin/cashout/${r.id}/paypal-issue?undo=1&ip=${issuePage}&from=paypal-issue`}>↩ Volver a la cola</a>
+                                <a className="btn btn-approve" href={`/admin/cashout/${r.id}/approve?returnPage=${currentPage}&pp=${pendingPage}`}>✓ Pagado</a>
+                                <a className="btn btn-reject"  href={`/admin/cashout/${r.id}/reject?returnPage=${currentPage}&pp=${pendingPage}`}>✗ Rechazar</a>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {totalIssuePages > 1 && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', padding: '12px 0 4px' }}>
+                    {issuePage > 1 && (
+                      <a href={`?tab=paypal-issue&ip=${issuePage - 1}`} style={{ background:'#fff', color:'#475569', border:'1px solid #E2E8F0', borderRadius: 8, padding: '5px 14px', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                        ← Anterior
+                      </a>
+                    )}
+                    <span style={{ fontSize: 12, color: '#64748B' }}>
+                      Página <strong style={{ color:'#0F172A' }}>{issuePage}</strong> de {totalIssuePages} · {totalIssue} con problema
+                    </span>
+                    {issuePage < totalIssuePages && (
+                      <a href={`?tab=paypal-issue&ip=${issuePage + 1}`} style={{ background:'#fff', color:'#475569', border:'1px solid #E2E8F0', borderRadius: 8, padding: '5px 14px', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                        Siguiente →
+                      </a>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>}
 
           {/* TAB: ADMOB */}
