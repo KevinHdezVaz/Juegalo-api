@@ -155,5 +155,3 @@ media.net, 8cu5l226o, RESELLER
 media.net, 8cu12aq1y, RESELLER
 media.net, 8cu355vs4, RESELLER
 media.net, 8cu9b72o6, RESELLER
-</content>
-</invoke>
