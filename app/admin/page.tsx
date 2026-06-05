@@ -142,6 +142,37 @@ async function getPaidByPeriod(days: number): Promise<number> {
   }
 }
 
+/**
+ * Detecta cuentas de PayPal usadas por más de 1 usuario (fraude multi-cuenta).
+ * Devuelve un Map: paypal_email → { count, userEmails[] }
+ */
+async function getDuplicatePayPals(): Promise<Map<string, { count: number; userEmails: string[] }>> {
+  const { data } = await supabase
+    .from('cashout_requests')
+    .select('user_id, account, users(email)')
+    .in('status', ['paid', 'pending']);
+
+  if (!data) return new Map();
+
+  // paypalEmail → Set<user_id, userEmail>
+  const groups = new Map<string, Map<string, string>>();
+  for (const row of data as any[]) {
+    if (!row.account) continue;
+    const paypal = String(row.account).split('|')[0].trim().toLowerCase();
+    if (!paypal) continue;
+    if (!groups.has(paypal)) groups.set(paypal, new Map());
+    groups.get(paypal)!.set(row.user_id, row.users?.email ?? '?');
+  }
+
+  const result = new Map<string, { count: number; userEmails: string[] }>();
+  for (const [paypal, users] of groups) {
+    if (users.size >= 2) {
+      result.set(paypal, { count: users.size, userEmails: Array.from(users.values()) });
+    }
+  }
+  return result;
+}
+
 async function getNotificationLogs(limit = 30) {
   try {
     const { data } = await supabase
@@ -206,11 +237,13 @@ export default async function AdminPage({
     { data: pendingData, total: totalPending },
     { data: issueData, total: totalIssue },
     stats,
+    duplicatePayPals,
   ] = await Promise.all([
     getCashoutRequests(currentPage, cashoutSearch),
     getPendingRequests(pendingPage),
     getPayPalIssueRequests(issuePage),
     getStats(),
+    getDuplicatePayPals(),
   ]);
 
   // Feature flags + adjoe config — solo cuando está en el tab de config
@@ -754,13 +787,23 @@ export default async function AdminPage({
                               </span>
                             </td>
                             <td>
-                              {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
-                                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                                  <span className="account-text">{account}</span>
-                                  <span dangerouslySetInnerHTML={{ __html: `<button onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');this.innerHTML='✓';this.style.color='#10B981';var tr=this.closest('tr');if(tr){tr.style.background='#FEF9C3';tr.style.borderLeft='4px solid #F59E0B';}setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)" title="Copiar correo — pinta la fila" style="background:#F1F5F9;border:1px solid #E2E8F0;cursor:pointer;font-size:16px;color:#64748B;padding:4px 7px;border-radius:6px;line-height:1;flex-shrink:0">📋</button>` }} />
-                                </div>
-                                {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
-                              </>); })()}
+                              {(() => {
+                                const { account, currency } = parseDetail(r.payment_detail ?? r.account);
+                                const dup = duplicatePayPals.get(account.toLowerCase());
+                                return (<>
+                                  <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                                    <span className="account-text" style={dup ? { color:'#991B1B', fontWeight:700 } : {}}>{account}</span>
+                                    <span dangerouslySetInnerHTML={{ __html: `<button onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');this.innerHTML='✓';this.style.color='#10B981';var tr=this.closest('tr');if(tr){tr.style.background='#FEF9C3';tr.style.borderLeft='4px solid #F59E0B';}setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)" title="Copiar correo — pinta la fila" style="background:#F1F5F9;border:1px solid #E2E8F0;cursor:pointer;font-size:16px;color:#64748B;padding:4px 7px;border-radius:6px;line-height:1;flex-shrink:0">📋</button>` }} />
+                                    {dup && (
+                                      <span title={`⚠️ Este PayPal lo usan ${dup.count} cuentas distintas:\n\n${dup.userEmails.join('\n')}\n\nPosible fraude multi-cuenta.`}
+                                        style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10.5, fontWeight:900, background:'#FEE2E2', color:'#991B1B', border:'1.5px solid #FCA5A5', borderRadius:6, padding:'3px 7px', cursor:'help' }}>
+                                        ⚠️ {dup.count} CUENTAS
+                                      </span>
+                                    )}
+                                  </div>
+                                  {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
+                                </>);
+                              })()}
                             </td>
                             <td>
                               <div className="date-main">{new Date(r.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
@@ -989,10 +1032,19 @@ export default async function AdminPage({
                               </span>
                             </td>
                             <td>
-                              {(() => { const { account, currency } = parseDetail(r.payment_detail ?? r.account); return (<>
-                                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                              {(() => {
+                                const { account, currency } = parseDetail(r.payment_detail ?? r.account);
+                                const dup = duplicatePayPals.get(account.toLowerCase());
+                                return (<>
+                                <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                                   <span className="account-text" style={{ color:'#991B1B', fontWeight:700 }}>{account}</span>
                                   <span dangerouslySetInnerHTML={{ __html: `<button onclick="navigator.clipboard.writeText('${account.replace(/'/g, "\\'")}');this.innerHTML='✓';this.style.color='#10B981';setTimeout(()=>{this.innerHTML='📋';this.style.color='#64748B'},1500)" title="Copiar correo" style="background:#fff;border:1px solid #FECACA;cursor:pointer;font-size:14px;color:#64748B;padding:3px 6px;border-radius:6px;line-height:1">📋</button>` }} />
+                                  {dup && (
+                                    <span title={`⚠️ Este PayPal lo usan ${dup.count} cuentas distintas:\n\n${dup.userEmails.join('\n')}`}
+                                      style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:10, fontWeight:900, background:'#7F1D1D', color:'#fff', borderRadius:6, padding:'3px 7px', cursor:'help' }}>
+                                      🚨 {dup.count} CUENTAS
+                                    </span>
+                                  )}
                                 </div>
                                 {currency && <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, background: '#F0FDF4', color: '#166534', border: '1px solid #BBF7D0', borderRadius: 6, padding: '2px 7px' }}>{CURRENCY_FLAGS[currency] ?? ''} {currency}</span></div>}
                               </>); })()}
