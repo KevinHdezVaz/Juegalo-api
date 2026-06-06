@@ -13,8 +13,10 @@ const supabase = createClient(
  */
 const PUBLIC_KEYS = new Set([
   'adjoe_app_id',
-  'force_update',   // "true" | "false"
-  'min_version',    // semver, ej. "1.2.0"
+  'force_update',       // "true" | "false"  — Android
+  'min_version',        // semver, ej. "1.2.0" — Android
+  'force_update_ios',   // "true" | "false"  — iOS
+  'min_version_ios',    // semver, ej. "1.2.0" — iOS
 ]);
 
 export async function GET() {
@@ -39,6 +41,11 @@ export async function GET() {
   } catch (e) {
     console.error('[Config] Error:', e);
     // Defaults seguros: sin force update
-    return NextResponse.json({ force_update: 'false', min_version: '1.0.0' });
+    return NextResponse.json({
+      force_update: 'false',
+      min_version: '1.0.0',
+      force_update_ios: 'false',
+      min_version_ios: '1.0.0',
+    });
   }
 }

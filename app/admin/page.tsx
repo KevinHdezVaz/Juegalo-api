@@ -250,7 +250,7 @@ export default async function AdminPage({
   const [flags, adjoeConfig]: [any[], Record<string, string>] = activeTab === 'config'
     ? await Promise.all([
         supabase.from('feature_flags').select('key, enabled, label, description, updated_at').then(r => r.data ?? []),
-        supabase.from('app_config').select('key, value, updated_at').in('key', ['adjoe_app_id', 'adjoe_s2s_token', 'force_update', 'min_version']).then(r => {
+        supabase.from('app_config').select('key, value, updated_at').in('key', ['adjoe_app_id', 'adjoe_s2s_token', 'force_update', 'min_version', 'force_update_ios', 'min_version_ios']).then(r => {
           const map: Record<string, string> = {};
           for (const row of r.data ?? []) map[row.key] = row.value ?? '';
           return map;
@@ -1406,69 +1406,94 @@ export default async function AdminPage({
               </div>
             </div>
 
-            {/* ── Force Update ──────────────────────────────────────────── */}
+            {/* ── Force Update (Android + iOS por separado) ─────────────── */}
             {(() => {
-              const forceUpdateActive = adjoeConfig['force_update'] === 'true';
-              const currentMinVersion = adjoeConfig['min_version'] || '1.0.0';
+              const platforms = [
+                {
+                  id: 'android',
+                  emoji: '🤖',
+                  label: 'Android',
+                  forceKey: 'force_update',
+                  versionKey: 'min_version',
+                  storeColor: '#10B981',
+                },
+                {
+                  id: 'ios',
+                  emoji: '🍎',
+                  label: 'iOS',
+                  forceKey: 'force_update_ios',
+                  versionKey: 'min_version_ios',
+                  storeColor: '#3B82F6',
+                },
+              ];
+
               return (
-                <div className="version-card">
-                  <div className="version-header">
-                    <div className="version-header-left">
-                      <div className="version-icon">🚀</div>
-                      <div>
-                        <div className="version-title">Actualización forzada</div>
-                        <div className="version-sub">Obliga a los usuarios a actualizar la app antes de continuar</div>
-                      </div>
-                    </div>
-                    <span className={`version-badge ${forceUpdateActive ? 'on' : 'off'}`}>
-                      {forceUpdateActive ? '⚠ Activa' : '✓ Inactiva'}
-                    </span>
-                  </div>
-
-                  {forceUpdateActive && (
-                    <div className="version-warning">
-                      ⚠️ <strong>Activa ahora</strong> — Los usuarios con versión anterior a <code>{currentMinVersion}</code> ven el dialog de actualización y no pueden usar la app.
-                    </div>
-                  )}
-
-                  <div className="version-body">
-                    {/* Toggle force_update */}
-                    <div className="version-field">
-                      <div className="version-label">Estado</div>
-                      <div className="version-toggle-row">
-                        <form method="POST" action="/admin/config">
-                          <input type="hidden" name="key" value="force_update" />
-                          <input type="hidden" name="value" value={String(!forceUpdateActive)} />
-                          <button
-                            type="submit"
-                            className={`version-toggle-btn ${forceUpdateActive ? 'deactivate' : 'activate'}`}
-                          >
-                            {forceUpdateActive ? '✓ Desactivar' : '⚠ Activar'}
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-
-                    {/* min_version */}
-                    <div className="version-field">
-                      <div className="version-label">Versión mínima requerida</div>
-                      <form method="POST" action="/admin/config">
-                        <input type="hidden" name="key" value="min_version" />
-                        <div className="adjoe-row">
-                          <input
-                            className="adjoe-input"
-                            type="text"
-                            name="value"
-                            defaultValue={currentMinVersion}
-                            placeholder="ej. 1.2.0"
-                            pattern="\d+\.\d+\.\d+"
-                            style={{ fontFamily: 'monospace' }}
-                          />
-                          <button type="submit" className="adjoe-save-btn">Guardar</button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16 }}>
+                  {platforms.map((p) => {
+                    const forceUpdateActive = adjoeConfig[p.forceKey] === 'true';
+                    const currentMinVersion = adjoeConfig[p.versionKey] || '1.0.0';
+                    return (
+                      <div key={p.id} className="version-card" style={{ borderTop: `4px solid ${p.storeColor}` }}>
+                        <div className="version-header">
+                          <div className="version-header-left">
+                            <div className="version-icon">{p.emoji}</div>
+                            <div>
+                              <div className="version-title">Forzar actualización · {p.label}</div>
+                              <div className="version-sub">Obliga a los usuarios de {p.label} a actualizar antes de continuar</div>
+                            </div>
+                          </div>
+                          <span className={`version-badge ${forceUpdateActive ? 'on' : 'off'}`}>
+                            {forceUpdateActive ? '⚠ Activa' : '✓ Inactiva'}
+                          </span>
                         </div>
-                      </form>
-                    </div>
-                  </div>
+
+                        {forceUpdateActive && (
+                          <div className="version-warning">
+                            ⚠️ <strong>Activa</strong> — Los usuarios de {p.label} con versión anterior a <code>{currentMinVersion}</code> ven el dialog y no pueden usar la app.
+                          </div>
+                        )}
+
+                        <div className="version-body">
+                          {/* Toggle */}
+                          <div className="version-field">
+                            <div className="version-label">Estado</div>
+                            <div className="version-toggle-row">
+                              <form method="POST" action="/admin/config">
+                                <input type="hidden" name="key" value={p.forceKey} />
+                                <input type="hidden" name="value" value={String(!forceUpdateActive)} />
+                                <button
+                                  type="submit"
+                                  className={`version-toggle-btn ${forceUpdateActive ? 'deactivate' : 'activate'}`}
+                                >
+                                  {forceUpdateActive ? '✓ Desactivar' : '⚠ Activar'}
+                                </button>
+                              </form>
+                            </div>
+                          </div>
+
+                          {/* min_version */}
+                          <div className="version-field">
+                            <div className="version-label">Versión mínima requerida</div>
+                            <form method="POST" action="/admin/config">
+                              <input type="hidden" name="key" value={p.versionKey} />
+                              <div className="adjoe-row">
+                                <input
+                                  className="adjoe-input"
+                                  type="text"
+                                  name="value"
+                                  defaultValue={currentMinVersion}
+                                  placeholder="ej. 1.2.0"
+                                  pattern="\d+\.\d+\.\d+"
+                                  style={{ fontFamily: 'monospace' }}
+                                />
+                                <button type="submit" className="adjoe-save-btn">Guardar</button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })()}
