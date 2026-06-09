@@ -46,7 +46,7 @@ async function getPendingRequests(pendingPage = 1) {
   const to   = from + PENDING_PAGE_SIZE - 1;
   const { data, count } = await supabase
     .from('cashout_requests')
-    .select(`*, users(username, email, coins)`, { count: 'exact' })
+    .select(`*, users(username, email, coins, is_emulator, is_jailbroken)`, { count: 'exact' })
     .eq('status', 'pending')
     .eq('paypal_issue', false)              // excluir los marcados como problema
     .order('created_at', { ascending: true })
@@ -59,7 +59,7 @@ async function getPayPalIssueRequests(page = 1) {
   const to   = from + PENDING_PAGE_SIZE - 1;
   const { data, count } = await supabase
     .from('cashout_requests')
-    .select(`*, users(username, email, coins)`, { count: 'exact' })
+    .select(`*, users(username, email, coins, is_emulator, is_jailbroken)`, { count: 'exact' })
     .eq('status', 'pending')
     .eq('paypal_issue', true)
     .order('paypal_issue_at', { ascending: false })
@@ -82,7 +82,7 @@ async function getCashoutRequests(page = 1, search?: string) {
     if (userIds.length === 0) return { data: [], total: 0 };
     const { data, count } = await supabase
       .from('cashout_requests')
-      .select(`*, users(username, email, coins)`, { count: 'exact' })
+      .select(`*, users(username, email, coins, is_emulator, is_jailbroken)`, { count: 'exact' })
       .in('user_id', userIds)
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -91,7 +91,7 @@ async function getCashoutRequests(page = 1, search?: string) {
 
   const { data, count } = await supabase
     .from('cashout_requests')
-    .select(`*, users(username, email, coins)`, { count: 'exact' })
+    .select(`*, users(username, email, coins, is_emulator, is_jailbroken)`, { count: 'exact' })
     .neq('status', 'paid')          // ocultar pagados de la tabla principal
     .order('created_at', { ascending: true })  // más antiguos primero
     .range(from, to);
@@ -772,7 +772,21 @@ export default async function AdminPage({
                               <div className="user-cell">
                                 <div className="user-avatar">{initials}</div>
                                 <div>
-                                  <div className="user-name">{r.users?.username ?? 'Jugador'}</div>
+                                  <div className="user-name" style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                                    {r.users?.username ?? 'Jugador'}
+                                    {r.users?.is_emulator && (
+                                      <span title="Esta cuenta accede desde un emulador (Android Studio, BlueStacks, etc). Posible fraude."
+                                        style={{ fontSize:10, fontWeight:900, background:'#FEF3C7', color:'#92400E', border:'1.5px solid #FCD34D', borderRadius:6, padding:'2px 6px', cursor:'help' }}>
+                                        🤖 EMULADOR
+                                      </span>
+                                    )}
+                                    {r.users?.is_jailbroken && (
+                                      <span title="Dispositivo rooteado (Android) o jailbroken (iOS). Riesgo alto de fraude."
+                                        style={{ fontSize:10, fontWeight:900, background:'#FEE2E2', color:'#991B1B', border:'1.5px solid #FCA5A5', borderRadius:6, padding:'2px 6px', cursor:'help' }}>
+                                        ⛓ ROOT/JB
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="user-email">{r.users?.email ?? '—'}</div>
                                 </div>
                               </div>
